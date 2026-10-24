@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { DiagramMeta } from "@/lib/store/diagram-types";
+import { MAX_IMPORT_BYTES } from "@/lib/store/import";
 
 const fmt = (iso: string) => new Date(iso).toLocaleString("ja-JP", { hour12: false });
 
@@ -18,6 +19,7 @@ export function DiagramList({ initial }: { initial: DiagramMeta[] }) {
   const [editName, setEditName] = useState("");
   const [renaming, setRenaming] = useState(false);
   const [copying, setCopying] = useState<string | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   async function create(name: string) {
     setBusy(true);
@@ -33,6 +35,26 @@ export function DiagramList({ initial }: { initial: DiagramMeta[] }) {
       router.push(`/${data.slug}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "作成に失敗しました");
+      setBusy(false);
+    }
+  }
+
+  /** 書き出したファイル（.json）から新しい図を作って開く */
+  async function importFile(file: File) {
+    setBusy(true);
+    setError(null);
+    try {
+      if (file.size > MAX_IMPORT_BYTES) throw new Error("ファイルが大きすぎます");
+      const res = await fetch("/api/diagrams/import", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: await file.text(),
+      });
+      const data = (await res.json().catch(() => ({}))) as { diagram?: DiagramMeta; error?: string };
+      if (!res.ok || !data.diagram) throw new Error(data.error ?? "読み込みに失敗しました");
+      router.push(`/${data.diagram.slug}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "読み込みに失敗しました");
       setBusy(false);
     }
   }
@@ -122,6 +144,30 @@ export function DiagramList({ initial }: { initial: DiagramMeta[] }) {
             作成して開く
           </button>
         </form>
+        <p className="flex flex-wrap items-center gap-2 text-sm text-zinc-500">
+          または
+          <button
+            type="button"
+            className={btn}
+            disabled={busy}
+            title="書き出した業務フロー（.json）から新しい図を作ります"
+            onClick={() => fileInput.current?.click()}
+          >
+            ファイルから読み込む
+          </button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              // 同じファイルを選び直しても onChange が来るよう、選択を空にしておく
+              e.target.value = "";
+              if (file) void importFile(file);
+            }}
+          />
+        </p>
         {error && (
           <p role="alert" className="text-sm text-amber-600 dark:text-amber-400">
             {error}

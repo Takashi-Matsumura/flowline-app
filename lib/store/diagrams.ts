@@ -67,6 +67,11 @@ export async function duplicateDiagram(slug: unknown): Promise<DiagramFile | nul
   return insertDiagram(name, () => ({ ...model, scope: { ...model.scope, title: name } }));
 }
 
+/** 書き出したファイルから読み込んだモデルで、新しい図を作る。業務名（model.scope.title）は name に揃える */
+export async function importDiagram(name: string, model: FlowModel): Promise<DiagramFile> {
+  return insertDiagram(name, (at) => ({ ...model, scope: { ...model.scope, title: name }, updatedAt: at }));
+}
+
 export async function readDiagram(slug: unknown): Promise<DiagramFile | null> {
   if (!isValidSlug(slug)) return null;
   const row = db().prepare("SELECT * FROM diagrams WHERE slug = ?").get(slug) as Row | undefined;
