@@ -2,7 +2,7 @@ import type { Branch, FlowModel, Step } from "@/lib/model/types";
 import { actorLabel, flowItems } from "@/lib/render/mermaid";
 
 /**
- * フローのプレビュー（app/editor/flow-player.tsx）で流す「場面」を、図のモデルから作る。純関数。
+ * フローのプレビュー（components/editor/flow-player.tsx）で流す「場面」を、図のモデルから作る。純関数。
  *
  * 場面は、はじめに → ステップ（分岐の入口・各場合・合流をはさむ）→ おわり の順。
  * キャプションはここでコードから作る（AI が無くても再生できる）。AI の言い回し（lib/preview/narrate.ts）が

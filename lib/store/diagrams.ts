@@ -6,7 +6,7 @@ import { isValidSlug, MAX_NAME_CHARS, newSlug } from "./slug";
 import { toDiagramMeta, type DiagramFile, type DiagramMeta, type DiagramPatch } from "./diagram-types";
 
 /**
- * 手で描く業務フロー図（/editor）の保存（SQLite の `diagrams` テーブル）。server 専用。
+ * 業務フロー図の保存（SQLite の `diagrams` テーブル）。server 専用。
  * 1 行 1 図。`model` は JSON テキストのまま持つ（sessions と同じ考え方）。
  */
 

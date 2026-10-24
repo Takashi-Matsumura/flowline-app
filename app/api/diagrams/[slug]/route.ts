@@ -2,7 +2,7 @@ import { deleteDiagram, readDiagram, renameDiagram, saveDiagram } from "@/lib/st
 import { parseDiagramPatch } from "@/lib/store/diagram-types";
 import { parseName } from "@/lib/store/slug";
 
-/** 保存本体の上限。図だけなので会議（8MB）より小さくてよい。 */
+/** 保存本体の上限。 */
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
 
 type Ctx = { params: Promise<{ slug: string }> };

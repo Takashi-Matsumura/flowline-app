@@ -14,8 +14,8 @@ import {
 } from "@/lib/model/limits";
 
 /**
- * 編集中の 1 行。key は並べ替え・削除で React の行を取り違えないためのもの（会議画面ではアクターの id）。
- * 会話の中で出てきた人は、種別が "unknown"、出席が未設定（undefined）のことがある。
+ * 編集中の 1 行。key は並べ替え・削除で React の行を取り違えないためのもの（既存の人はアクターの id）。
+ * 種別が "unknown" のことがある（決まっていない人）。
  */
 export type StakeholderRow = {
   key: string;
@@ -24,10 +24,9 @@ export type StakeholderRow = {
   role?: ActorRole;
   /** この業務の中心（図で強調する）。誰にも無ければ終点の人 */
   focus?: true;
-  present?: boolean;
   /** 部署の中の人（担当者の候補）。個人は列にせず、ここに書く */
   members?: string[];
-  /** その会社での呼び方・別名（会話からこの人を見つける手がかり） */
+  /** その会社での呼び方・別名 */
   aliases?: string[];
   /** 製品・サービス名、会社名、正式名称（図では名前の下に 2 段目で添える） */
   product?: string;
@@ -61,13 +60,6 @@ const ALIAS_PLACEHOLDER: Record<ActorKind, string> = {
   unknown: "例: 経理、基幹",
 };
 
-/** 出席の 3 択。undefined は未設定（会話の中で出てきた人は、まず未設定になる） */
-const PRESENCE_OPTIONS: { value: boolean | undefined; label: string }[] = [
-  { value: true, label: "出席" },
-  { value: false, label: "欠席" },
-  { value: undefined, label: "未設定" },
-];
-
 const ROLE_TEXT: Record<ActorRole, { label: string; hint: string }> = {
   trigger: { label: "起点", hint: "この業務を始める人（最初の依頼・申込みをする人）" },
   end: { label: "終点", hint: "最終的な成果（書類・データ・結果）を受け取る人" },
@@ -84,8 +76,6 @@ export const newStakeholderRow = (name: string, kind: ActorKind = "role"): Stake
   key: newKey(),
   name,
   kind,
-  // システムは会議に出席するものではない
-  present: kind === "system" ? undefined : true,
 });
 
 const text = (v: string | undefined) => v?.replace(/\s+/g, " ").trim() ?? "";
@@ -134,7 +124,7 @@ function NameListInput({
       onBlur={commit}
       onKeyDown={(e) => {
         if (e.nativeEvent.isComposing) return;
-        // Enter でフォーム全体（会議の開始）が送信されないようにする
+        // Enter で囲んでいるフォームが送信されないようにする
         if (e.key === "Enter") {
           e.preventDefault();
           commit();
@@ -197,11 +187,10 @@ function KindIcon({ kind }: { kind: ActorKind }) {
 }
 
 /**
- * 会議の前に、業務の登場人物（シーケンス図のライフライン）を並べる。会議画面での手直しにも使う。
- * 自分の作業の前後にいる人を先に置いておくと、会話が「その間をどうつなぐか」に向かう。
+ * 業務の登場人物（シーケンス図のライフライン）を並べる。
  *
  * 図の頭と同じ形のカードを左から並べ、そのカードを直接いじる（見たままが図の並びになる）。
- * 名前・種別・製品名・呼び方・出席・削除・並べ替えは、カードを押すと開くパネルで。起点・終点は全体で 1 人ずつなので下のセレクトで選ぶ。
+ * 名前・種別・製品名・呼び方・削除・並べ替えは、カードを押すと開くパネルで。起点・終点は全体で 1 人ずつなので下のセレクトで選ぶ。
  */
 export function StakeholderEditor({
   rows,
@@ -210,26 +199,23 @@ export function StakeholderEditor({
   removeNotice = () => null,
   onFold,
   extra,
-  footer,
 }: {
   rows: StakeholderRow[];
   onChange: (rows: StakeholderRow[]) => void;
   /**
-   * 削除できない理由（削除できるなら null）。会議画面では、ステップがつながっている人は消さない
+   * 削除できない理由（削除できるなら null）。ステップがつながっている人は消さない
    * （送り手・受け手のいないステップは図に描かれず、黙って消えてしまうため）
    */
   removeBlocked?: (row: StakeholderRow) => string | null;
   /** 削除できるが、一緒に消えるものがあるときの知らせ（取り消したステップなど） */
   removeNotice?: (row: StakeholderRow) => string | null;
   /**
-   * 個人の列を部署にたたむ（会議画面だけ）。渡すと、個人のカードに「部署に入れる」を出す。
+   * 個人の列を部署にたたむ。渡すと、個人のカードに「部署に入れる」を出す。
    * その人のステップは部署から出るようになり、担当者がその人になる
    */
   onFold?: (fromKey: string, intoKey: string) => void;
-  /** 選んだ人の設定パネルの下に足すもの（会議画面・/editor の付箋）。無ければ出さない */
+  /** 選んだ人の設定パネルの下に足すもの（付箋）。無ければ出さない */
   extra?: (row: StakeholderRow) => ReactNode;
-  /** レーンの下端に置くもの（開始画面の AI 候補） */
-  footer?: ReactNode;
 }) {
   const [draft, setDraft] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
@@ -308,7 +294,7 @@ export function StakeholderEditor({
         <span>登場人物</span>
         {/* auto-phrase: 日本語を文節の切れ目で折り返す（「入れま／す」のような折り返しを避ける） */}
         <p className="text-xs text-zinc-500 [word-break:auto-phrase]">
-          業務が流れる順に、左から並べてください。会議に出ていない人も入れます。カードを押すと詳しく設定でき、ドラッグで並べ替えられます。
+          業務が流れる順に、左から並べてください。カードを押すと詳しく設定でき、ドラッグで並べ替えられます。
         </p>
       </div>
 
@@ -318,19 +304,9 @@ export function StakeholderEditor({
           {rows.map((r, i) => {
             const isSelected = r.key === selected;
             const system = r.kind === "system";
-            const absent = r.present === false && !system;
             const what = text(r.product) || (KIND_OPTIONS.find((o) => o.value === r.kind)?.label ?? "種別は未設定");
-            // 2 行目: 出席の状態（欠席・未設定）を優先し、なければ製品名か種別。起点・終点はその前にバッジで出す。
-            // システムは出席を聞かない
-            const sub = system
-              ? what
-              : r.present === undefined
-                ? "出席は未設定"
-                : absent
-                  ? "欠席"
-                  : r.role
-                    ? ""
-                    : what;
+            // 2 行目: 製品名か種別。起点・終点はその前にバッジで出す（バッジがあれば 2 行目は空ける）
+            const sub = !system && r.role ? "" : what;
             return (
               <li
                 key={r.key}
@@ -361,9 +337,7 @@ export function StakeholderEditor({
                   className={`flex h-14 w-full cursor-grab flex-col items-center justify-center gap-0.5 rounded-lg border px-1.5 active:cursor-grabbing ${
                     isSelected
                       ? "border-sky-600 bg-background ring-2 ring-sky-600/20 dark:border-sky-400"
-                      : absent
-                        ? "border-dashed border-black/25 bg-zinc-100 text-zinc-500 dark:border-white/25 dark:bg-white/5"
-                        : "border-black/15 bg-background hover:border-black/30 dark:border-white/20 dark:hover:border-white/40"
+                      : "border-black/15 bg-background hover:border-black/30 dark:border-white/20 dark:hover:border-white/40"
                   }`}
                 >
                   <span className="flex max-w-full items-center gap-1.5 font-medium">
@@ -386,7 +360,7 @@ export function StakeholderEditor({
                 </button>
                 <span
                   aria-hidden
-                  className={`h-6 border-l border-dashed ${absent ? "border-black/15 dark:border-white/15" : "border-black/30 dark:border-white/30"}`}
+                  className="h-6 border-l border-dashed border-black/30 dark:border-white/30"
                 />
               </li>
             );
@@ -408,7 +382,7 @@ export function StakeholderEditor({
                   onBlur={commitDraft}
                   onKeyDown={(e) => {
                     if (e.nativeEvent.isComposing) return;
-                    // Enter でフォーム全体（会議の開始）が送信されないようにする
+                    // Enter で囲んでいるフォームが送信されないようにする
                     if (e.key === "Enter" || (e.key === "Tab" && draft.trim() !== "")) {
                       e.preventDefault();
                       commitDraft();
@@ -460,10 +434,7 @@ export function StakeholderEditor({
                       type="button"
                       aria-pressed={current.kind === o.value}
                       title={o.label}
-                      // システムは会議に出席しないので、出席を未設定に戻す
-                      onClick={() =>
-                        update(current.key, { kind: o.value, ...(o.value === "system" ? { present: undefined } : {}) })
-                      }
+                      onClick={() => update(current.key, { kind: o.value })}
                       className={`px-2.5 py-1.5 text-xs ${j > 0 ? "border-l border-black/15 dark:border-white/20" : ""} ${
                         current.kind === o.value
                           ? "bg-sky-600 text-white dark:bg-sky-500"
@@ -548,48 +519,6 @@ export function StakeholderEditor({
                 </select>
               </div>
             )}
-            {current.kind !== "system" && (
-              <div className="flex flex-col gap-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs text-zinc-500" id={`presence-${current.key}`}>
-                    この会議に
-                  </span>
-                  <div
-                    role="radiogroup"
-                    aria-labelledby={`presence-${current.key}`}
-                    className="flex overflow-hidden rounded-md border border-black/15 dark:border-white/20"
-                  >
-                    {PRESENCE_OPTIONS.map((o, j) => (
-                      <button
-                        key={o.label}
-                        type="button"
-                        role="radio"
-                        aria-checked={current.present === o.value}
-                        onClick={() => update(current.key, { present: o.value })}
-                        className={`px-2.5 py-1 text-xs ${j > 0 ? "border-l border-black/15 dark:border-white/20" : ""} ${
-                          current.present === o.value
-                            ? o.value === false
-                              ? "bg-amber-600 text-white dark:bg-amber-500"
-                              : o.value === undefined
-                                ? "bg-zinc-500 text-white"
-                                : "bg-sky-600 text-white dark:bg-sky-500"
-                            : "hover:bg-black/5 dark:hover:bg-white/10"
-                        }`}
-                      >
-                        {o.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <p className="text-xs text-zinc-500 [word-break:auto-phrase]">
-                  {current.present === false
-                    ? "欠席の人の中の作業は、AI が質問せず「次回確認」に回します。出席者には、この人との受け渡しだけを聞きます。"
-                    : current.present === undefined
-                      ? "未設定のときは、AI は出席しているか分からないものとして扱います。"
-                      : "欠席にすると、AI はこの人の中の作業を質問せず「次回確認」に回します。"}
-                </p>
-              </div>
-            )}
             {extra?.(current)}
             <div className="flex flex-wrap items-center gap-2 border-t border-black/5 pt-3 dark:border-white/10">
               <span className="flex-1" />
@@ -628,7 +557,6 @@ export function StakeholderEditor({
           </div>
         )}
 
-        {footer && <div className="border-t border-black/10 px-3 py-2.5 dark:border-white/15">{footer}</div>}
       </div>
 
       {rows.length > 0 && (
@@ -676,7 +604,7 @@ export function StakeholderEditor({
               {!trigger && "業務を始める人"}
               {!trigger && !end && "と"}
               {!end && "成果を受け取る人"}
-              を選ぶと、会話の行き先がはっきりします
+              を選ぶと、業務の始まりと終わりがはっきりします
             </span>
           )}
         </div>

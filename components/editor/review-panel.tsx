@@ -36,7 +36,7 @@ type AiFix =
   | { status: "error"; for: string; message: string };
 
 /**
- * 図の点検（/editor の右側のパネル）。チームで描いた図の、描いた本人たちが気づきにくい抜けを指摘する。
+ * 図の点検（編集画面の右側のパネル）。チームで描いた図の、描いた本人たちが気づきにくい抜けを指摘する。
  * - 図の点検: コードで確実に言えるもの（lib/review/rules.ts）。開いたらすぐ出る
  * - AI の指摘: ローカル AI が図を読んで、抜けていそうな手順・例外・業務名との食い違いを挙げる（30〜60 秒）
  * 指摘の手順の番号を押すと、図のそのステップを強調する。業務の前提（目的・きっかけ・頻度）はここで書ける。
@@ -133,7 +133,7 @@ export function ReviewPanel({
   useEffect(() => () => onPreview(null), [onPreview]);
   /**
    * 手順を足しても応えられない指摘を、関係する手順の付箋（チームで決めること）にする。
-   * 付箋は論点として残り、次の会議で AI が聞く。同じ文の付箋がもうあれば貼らない
+   * 付箋は論点として残り、業務分掌の「未決事項」に載る。同じ文の付箋がもうあれば貼らない
    */
   const noteFor = (f: Finding) => {
     const question = f.detail || f.title;
@@ -427,7 +427,7 @@ function FixBox({
                   <button type="button" className={fixBtn} onClick={note.onAdd}>
                     付箋にして残す
                   </button>
-                  <span className="text-zinc-500">次の会議で AI がチームに聞きます</span>
+                  <span className="text-zinc-500">業務分掌の「未決事項」に載ります</span>
                 </span>
               ))}
           </p>

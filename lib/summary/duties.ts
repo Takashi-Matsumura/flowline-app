@@ -97,7 +97,7 @@ export function dutiesOf(model: FlowModel): Duty[] {
         assignees: [...assignees].map(([who, nos]) => `${who}（${numberRange(nos)}）`),
         rules: notesOn(model, { kind: "actor", id: actor.id })
           .filter((n) => noteState(n) === "answered")
-          .map((n) => `${n.prompt?.text ?? n.question} → ${n.answer ?? ""}`),
+          .map((n) => `${n.question} → ${n.answer ?? ""}`),
       };
     })
     .filter((d) => d.tasks.length > 0 || d.received.length > 0 || d.decisions.length > 0);

@@ -3,14 +3,14 @@
 import { useCallback, useSyncExternalStore } from "react";
 
 /**
- * フローの点検（/editor の右パネル）の幅（px）。`null` は「既定（w-96）」を意味する。
+ * フローの点検（編集画面の右パネル）の幅（px）。`null` は「既定（w-96）」を意味する。
  *
- * `useLeftWidth`（app/components/use-left-width.ts）と同じ作法: `localStorage` に覚えさせ、
+ * `localStorage` に覚えさせ、
  * `useSyncExternalStore` でサーバーの描画を必ず既定値（null）にし、
  * クライアントでは保存値を読む。他のタブとも `storage` イベントで同期する。
  */
 
-const KEY = "grilljev:reviewWidth";
+const KEY = "flowline:reviewWidth";
 
 const listeners = new Set<() => void>();
 

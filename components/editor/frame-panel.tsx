@@ -5,7 +5,7 @@ import type { FlowModel, ModelOp } from "@/lib/model/types";
 import { KIND_TEXT } from "./branch-section";
 
 /**
- * 枠（分岐）の付箋のパネル（/editor の右側）。図の枠の見出しの札を右クリックする・札の横の付箋の印を押すと開く。
+ * 枠（分岐）の付箋のパネル（編集画面の右側）。図の枠の見出しの札を右クリックする・札の横の付箋の印を押すと開く。
  * 枠の中の手順を選ばなくても、分岐の見分け方・くり返しを終える基準などを、枠に直接貼れるようにする
  */
 export function FramePanel({

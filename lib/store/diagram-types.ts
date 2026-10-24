@@ -2,7 +2,7 @@ import { isFlowModel } from "@/lib/model/guard";
 import type { FlowModel } from "@/lib/model/types";
 
 /**
- * 手で描く業務フロー図（/editor）の保存データ。純粋な部分（型・検証）。DB には触れない。
+ * 業務フロー図の保存データ。純粋な部分（型・検証）。DB には触れない。
  * 保存は SQLite の `diagrams` テーブル（lib/store/diagrams.ts）。slug の形式は lib/store/slug.ts。
  */
 

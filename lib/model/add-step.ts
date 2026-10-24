@@ -2,7 +2,7 @@ import { visibleSteps } from "@/lib/render/mermaid";
 import { endOrder, orderInArm, orderJustAfter } from "./branch";
 import type { ActorId, FlowModel, ModelOp, StepId } from "./types";
 
-/** 手で足すステップの入力（/editor のステップ追加フォーム。後で音声からも同じ形で渡す）。 */
+/** 手で足すステップの入力（ステップ追加フォーム）。 */
 export type StepInput = {
   from: ActorId;
   to: ActorId;
@@ -59,10 +59,8 @@ export function addStepOp(
       ...(artifact ? { artifact } : {}),
       branchId,
       order,
-      confidence: input.provisional ? 0.5 : 1,
       status: input.provisional ? "provisional" : "confirmed",
       flags: {},
-      sourceUtteranceIds: [],
     },
   };
 }

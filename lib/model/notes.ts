@@ -5,8 +5,7 @@ import type { ActorId, FlowModel, IssueKind, ModelOp, OpenIssue, StepId } from "
  * 図に貼る付箋（チームで決めること・決まったこと）。純関数。
  *
  * 付箋は論点（OpenIssue）そのもの。手順・枠・登場人物に結び付いた論点を、図を直す画面では「付箋」として見せる。
- * 新しい入れ物を作らないのは、論点なら会議画面の AI ファシリテーターが未回答のものを拾って問いにし、
- * 業務分掌にも「論点」として出るから（図を直す画面で残した付箋が、次の会議で聞かれる）。
+ * 論点なので、業務分掌にも「未決事項」として出る。
  * 答えが入ると「決まりごと」になり、業務分掌ではその手順・枠・登場人物の決まりごととして出る。
  */
 
@@ -15,7 +14,7 @@ export const MAX_NOTE_CHARS = 200;
 /** 付箋を貼る先。枠は Branch.groupId（場合ごとではなく枠全体） */
 export type NoteTarget = { kind: "step"; id: StepId } | { kind: "frame"; id: string } | { kind: "actor"; id: ActorId };
 
-/** 付箋の状態。open = まだ決まっていない（保留も含む）/ answered = 決まった */
+/** 付箋の状態。open = まだ決まっていない / answered = 決まった */
 export type NoteState = "open" | "answered";
 
 export const noteState = (issue: OpenIssue): NoteState => (issue.status === "answered" ? "answered" : "open");

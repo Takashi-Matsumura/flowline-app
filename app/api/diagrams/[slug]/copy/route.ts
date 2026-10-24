@@ -3,7 +3,7 @@ import { toDiagramMeta } from "@/lib/store/diagram-types";
 
 type Ctx = { params: Promise<{ slug: string }> };
 
-/** 保存済みの図のコピーを作る（/editor の一覧の「コピー」）。作った図の一覧用の情報を返す */
+/** 保存済みの図のコピーを作る（一覧の「コピー」）。作った図の一覧用の情報を返す */
 export async function POST(_req: Request, { params }: Ctx) {
   const { slug } = await params;
   const copied = await duplicateDiagram(slug);

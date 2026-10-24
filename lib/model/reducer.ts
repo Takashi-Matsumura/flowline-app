@@ -1,16 +1,10 @@
 import type { Actor, FlowModel, ModelOp, OpenIssue, Scope, Step } from "./types";
 
 /**
- * 質問（issue.ask）したあと、答えないまま業務の発話が続いたら、この回数で保留にする。
- * 「答えが出なければ保留として明記し、次に進む」= 同じ問いで会議が滞留しないための歯止め。
- */
-export const SKIP_LIMIT = 2;
-
-/**
  * FlowModel を変更する唯一の入口。純関数（時刻は `at` で受け取る）。
  *
  * **不正な op は例外にせず無視する**（存在しないアクターへのステップ、重複 id など）。
- * ライブ会議で 1 発話の判定ミスが全体を止めるより、その 1 op だけ落ちる方がよい。
+ * 1 つの不正な op で全体を止めるより、その 1 op だけ落ちる方がよい（AI の直す案も ops で届く）。
  * 何か 1 つでも適用されたときだけ rev を 1 上げる。
  */
 export function applyOps(model: FlowModel, ops: ModelOp[], at: string): FlowModel {
@@ -33,44 +27,6 @@ function applyOne(m: FlowModel, op: ModelOp, rev: number): FlowModel | null {
       if (m.actors.some((a) => a.id === op.actor.id)) return null;
       const lane = m.actors.reduce((max, a) => Math.max(max, a.lane), -1) + 1;
       return { ...m, actors: [...m.actors, { ...op.actor, lane, addedAtRev: rev }] };
-    }
-
-    case "actor.merge": {
-      if (op.from === op.into) return null;
-      const from = m.actors.find((a) => a.id === op.from);
-      const into = m.actors.find((a) => a.id === op.into);
-      if (!from || !into) return null;
-      const aliases = [...new Set([...into.aliases, from.name, ...from.aliases])].filter(
-        (name) => name !== into.name,
-      );
-      return {
-        ...m,
-        actors: m.actors
-          .filter((a) => a.id !== from.id)
-          .map((a) =>
-            a.id === into.id
-              ? {
-                  ...a,
-                  aliases,
-                  role: a.role ?? from.role,
-                  focus: a.focus ?? from.focus,
-                  present: a.present ?? from.present,
-                  product: a.product ?? from.product,
-                  note: a.note ?? from.note,
-                  ...(into.members || from.members
-                    ? { members: [...new Set([...(into.members ?? []), ...(from.members ?? [])])] }
-                    : {}),
-                }
-              : a,
-          ),
-        steps: m.steps.map((s) => ({
-          ...s,
-          from: s.from === from.id ? into.id : s.from,
-          to: s.to === from.id ? into.id : s.to,
-          ...(s.approver === from.id ? { approver: into.id } : {}),
-        })),
-        issues: moveActorNotes(m.issues, from.id, into.id),
-      };
     }
 
     case "actor.fold": {
@@ -125,7 +81,7 @@ function applyOne(m: FlowModel, op: ModelOp, rev: number): FlowModel | null {
     case "actor.update": {
       const target = m.actors.find((a) => a.id === op.id);
       if (!target) return null;
-      const { name: rawName, role, focus, present, product, note, aliases, ...rest } = op.patch;
+      const { name: rawName, role, focus, product, note, aliases, ...rest } = op.patch;
       const name = rawName?.replace(/\s+/g, " ").trim();
       // 空の名前・他の人と同じ名前への改名は無視する（名前で人を見分けているため）
       const renamed =
@@ -135,8 +91,8 @@ function applyOne(m: FlowModel, op: ModelOp, rev: number): FlowModel | null {
       // 改名した元の名前は別名に残す。別名に自分の名前は入れない
       const base = aliases ?? target.aliases;
       next.aliases = [...new Set(renamed ? [...base, target.name] : base)].filter((n) => n !== next.name);
-      const optional = { present, product, note } as const;
-      for (const key of ["present", "product", "note"] as const) {
+      const optional = { product, note } as const;
+      for (const key of ["product", "note"] as const) {
         const v = optional[key];
         if (v === null || v === "") delete next[key];
         else if (v !== undefined) (next as Record<typeof key, unknown>)[key] = v;
@@ -245,50 +201,6 @@ function applyOne(m: FlowModel, op: ModelOp, rev: number): FlowModel | null {
       return { ...m, issues: [...m.issues, { ...op.issue, raisedAtRev: rev }] };
     }
 
-    case "issue.ask": {
-      const target = m.issues.find((i) => i.id === op.id);
-      // 答え済み・保留済みの論点は蒸し返さない
-      if (!target || target.status === "answered" || target.status === "parked") return null;
-      return {
-        ...m,
-        issues: m.issues.map((i) =>
-          i.id === op.id ? { ...i, status: "asked", prompt: op.prompt, ignored: 0 } : i,
-        ),
-      };
-    }
-
-    case "issue.skip": {
-      const target = m.issues.find((i) => i.id === op.id);
-      if (!target || target.status !== "asked") return null;
-      const ignored = (target.ignored ?? 0) + 1;
-      return {
-        ...m,
-        issues: m.issues.map((i) =>
-          i.id === op.id
-            ? { ...i, ignored, status: ignored >= SKIP_LIMIT ? "parked" : "asked" }
-            : i,
-        ),
-      };
-    }
-
-    case "issue.resolve": {
-      if (!m.issues.some((i) => i.id === op.id)) return null;
-      return {
-        ...m,
-        issues: m.issues.map((i) =>
-          i.id === op.id ? { ...i, status: "answered", answer: op.answer } : i,
-        ),
-      };
-    }
-
-    case "issue.park": {
-      if (!m.issues.some((i) => i.id === op.id)) return null;
-      return {
-        ...m,
-        issues: m.issues.map((i) => (i.id === op.id ? { ...i, status: "parked" } : i)),
-      };
-    }
-
     case "issue.update": {
       const target = m.issues.find((i) => i.id === op.id);
       if (!target) return null;
@@ -336,11 +248,6 @@ export function emptyModel(scope: Partial<Scope>, at: string): FlowModel {
     issues: [],
     updatedAt: at,
   };
-}
-
-/** 末尾に足すときの order。中間に挿すときは前後の中点を自分で計算すること。 */
-export function nextOrder(model: FlowModel): number {
-  return model.steps.reduce((max, s) => Math.max(max, s.order), 0) + 1;
 }
 
 /**

@@ -11,17 +11,14 @@ export type StepId = string; // "S12"
 
 export type ActorKind = "person" | "role" | "system" | "external" | "unknown";
 
-/** trigger=業務を始める人 / end=最終的な成果を受け取る人。会議の前に決めて、会話の方向を作る */
+/** trigger=業務を始める人 / end=最終的な成果を受け取る人 */
 export type ActorRole = "trigger" | "end";
 
 export type Actor = {
   id: ActorId;
   name: string;
   kind: ActorKind;
-  /**
-   * 会話中の言い方のゆらぎ（「経理」「経理担当」）と、その会社だけの呼び方（「基幹」「共有フォルダ」）。
-   * 会話からこの人を見つける手がかりで、whisper のヒントにも使う。改名した元の名前もここに残る
-   */
+  /** その会社での呼び方・別名（「基幹」「共有フォルダ」）。改名した元の名前もここに残る */
   aliases: string[];
   /** ライフラインの並び順（左から） */
   lane: number;
@@ -32,11 +29,6 @@ export type Actor = {
    * 誰にも付いていなければ終点の人を中心とみなす（focusActorOf）
    */
   focus?: true;
-  /**
-   * 会議に出席しているか。false の登場人物の作業は、会話からは推測しかできない（未確認として扱う）。
-   * 未設定は undefined。システムは出席しないので見ない（isAbsent）
-   */
-  present?: boolean;
   /**
    * 具体的な名前。システムなら製品・サービス名（「freee会計」）、社外なら会社名、部署なら正式名称。
    * 図では名前の下に 2 段目で添える（toMermaid・drawio）
@@ -56,7 +48,7 @@ export type MessageKind = "sync" | "async" | "reply" | "self";
 
 export type StepStatus = "confirmed" | "provisional" | "retracted";
 
-/** ops-grill の掘り下げ軸。ステップの脇にバッジで出す */
+/** 掘り下げの観点（例外・暗黙知・属人化）。ステップの脇にバッジで出す */
 export type StepFlags = {
   exception?: true;
   tacit?: true;
@@ -81,11 +73,8 @@ export type Step = {
   branchId: string | null;
   /** 実数。「あ、その前に」の中間挿入を整数の振り直し無しで行うため */
   order: number;
-  /** 判定の確信度 0..1。低いものは点線で描く */
-  confidence: number;
   status: StepStatus;
   flags: StepFlags;
-  sourceUtteranceIds: string[];
   addedAtRev: number;
   /** 取り消す前の状態。元に戻すとき（step.restore）に使う */
   retractedFrom?: Exclude<StepStatus, "retracted">;
@@ -99,7 +88,7 @@ export type Branch = {
   groupId: string;
   index: number;
   /**
-   * 枠の中が空のときの、図の中の位置（ステップの order と同じ物差し）。/editor で先に枠を作ると、
+   * 枠の中が空のときの、図の中の位置（ステップの order と同じ物差し）。先に枠を作ると、
    * 中にステップが無いので、これで描く位置を決める。中にステップがあれば使わない（ステップの位置で決まる）
    */
   order?: number;
@@ -114,7 +103,7 @@ export type IssueKind =
   | "tool"
   | "handoff";
 
-export type IssueStatus = "open" | "asked" | "answered" | "parked";
+export type IssueStatus = "open" | "answered";
 
 export type OpenIssue = {
   id: string;
@@ -125,25 +114,15 @@ export type OpenIssue = {
   relatedFrameIds?: string[];
   /** 付箋を貼った登場人物。その人・部署・システムについて決めておくこと */
   relatedActorIds?: ActorId[];
-  /** parked = 「答えが出ないので保留にして進む」（ライブロック防止） */
   status: IssueStatus;
-  /** grill-me の規律: 各問に推奨回答を添える */
-  prompt?: { text: string; suggestedAnswer: string };
-  /** 質問したあと、答えないまま業務の発話が続いた回数。2 回で保留にする */
-  ignored?: number;
   answer?: string;
   raisedAtRev: number;
-  /**
-   * 所属を尋ねる問い（「田中さんはどの部署の方ですか？」）のとき、その個人の列の id。
-   * 答えに部署の名前が 1 つだけ出てきたら、その部署にたたむ（actor.fold）
-   */
-  foldActorId?: ActorId;
 };
 
-/** 対象業務＝参加者の共通認識。会話の中で変わりうる */
+/** 対象業務（図の前提）。 */
 export type Scope = {
   title: string;
-  /** 存在意義。空のうちは grill の最優先課題になる */
+  /** 存在意義。空のうちは点検で最初に指摘する */
   purpose: string;
   trigger: string;
   frequency: string;
@@ -167,9 +146,7 @@ export type NewIssue = Omit<OpenIssue, "raisedAtRev">;
 export type ModelOp =
   | { op: "scope.set"; patch: Partial<Scope> }
   | { op: "actor.add"; actor: NewActor }
-  /** 表記ゆれの統合。from のステップを into へ付け替え、from の名前を into の aliases へ足す */
-  | { op: "actor.merge"; from: ActorId; into: ActorId }
-  /** 会議画面での手直し。改名した元の名前は aliases に残す。role は null で外す（起点・終点は各 1 人） */
+  /** 手直し。改名した元の名前は aliases に残す。role は null で外す（起点・終点は各 1 人） */
   | {
       op: "actor.update";
       id: ActorId;
@@ -180,7 +157,6 @@ export type ModelOp =
         role?: ActorRole | null;
         /** true で中心にする（前の人からは外す）。null で外す（終点が中心に戻る） */
         focus?: true | null;
-        present?: boolean | null;
         members?: string[];
         aliases?: string[];
         product?: string | null;
@@ -214,12 +190,6 @@ export type ModelOp =
   /** 分岐（枠の 1 つの場合）を消す。中にあったステップは枠の外に出す（ステップ自体は消さない） */
   | { op: "branch.remove"; id: string }
   | { op: "issue.add"; issue: NewIssue }
-  /** ファシリテーターが問いを出した。文言と推奨回答を持たせ、質問済みにする */
-  | { op: "issue.ask"; id: string; prompt: { text: string; suggestedAnswer: string } }
-  /** 質問したのに答えないまま話が進んだ。回数を数え、SKIP_LIMIT 回で保留にする */
-  | { op: "issue.skip"; id: string }
-  | { op: "issue.resolve"; id: string; answer: string }
-  | { op: "issue.park"; id: string }
   /**
    * 付箋（ステップに結び付いた論点。lib/model/notes.ts）の手直し。answer を書くと決まった（answered）に、
    * null で外すとまだ決まっていない（open）に戻す

@@ -75,7 +75,7 @@ function stepAt(target: EventTarget): number | null {
 }
 
 /**
- * 強調の印。CSS でステップ名の色を変える。選んでいるステップ（編集パネル）は青、声で直しているステップは橙。
+ * 強調の印。CSS でステップ名の色を変える。選んでいるステップ（編集パネル）は青、点検の指摘で見ているステップは橙。
  * 番号は黒い丸の上の白抜きなので色を変えない（変えると読めなくなる）。
  * 図のコードは変えずに描いた SVG へ印を付けるので、書き出す図には入らない。
  */
@@ -580,7 +580,7 @@ async function renderSvg(mermaid: MermaidApi, code: string): Promise<string> {
 }
 
 /**
- * 画面に出さずに、Mermaid のコードを SVG にする（/editor で、枠を畳んでいても .svg は開いた図で書き出すため）。
+ * 画面に出さずに、Mermaid のコードを SVG にする（枠を畳んでいても .svg は開いた図で書き出すため）。
  * 解釈できないコードなら null。
  */
 export async function renderMermaidSvg(code: string): Promise<string | null> {
@@ -648,7 +648,7 @@ export function MermaidDiagram({
    * drawn = 図の上から何番目の枠か（drawnFrames の順）、folded = 何番目の「▸ …」の注記か（collapsedFrames の順）
    */
   onFrameNotes?: (at: { drawn: number } | { folded: number }) => void;
-  /** 強調するステップの番号（1 始まり。0 なら強調しない）。音声で直しているステップを示す */
+  /** 強調するステップの番号（1 始まり。0 なら強調しない）。点検の指摘で見ているステップを示す */
   highlightStep?: number;
   /** 編集パネルで選んでいるステップの番号（1 始まり。0 なら無し） */
   selectedStep?: number;

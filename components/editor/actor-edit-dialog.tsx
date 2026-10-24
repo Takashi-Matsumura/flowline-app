@@ -17,7 +17,6 @@ const toRows = (model: FlowModel): StakeholderRow[] =>
       kind: a.kind,
       role: a.role,
       focus: a.focus,
-      present: a.present,
       members: a.members,
       aliases: a.aliases,
       product: a.product,
@@ -32,8 +31,8 @@ const text = (v: string | undefined) => v?.replace(/\s+/g, " ").trim() || undefi
 export type Fold = { from: string; into: string };
 
 /**
- * 編集結果を ops にする。比べる相手は**保存する瞬間の最新モデル**（ダイアログを開いている間にも、
- * 会話の判定で図は育つ）。変わった項目だけを送り、開いている間に消えた（統合された）人は飛ばす。
+ * 編集結果を ops にする。比べる相手は**保存する瞬間の最新モデル**。
+ * 変わった項目だけを送り、開いている間に消えた人は飛ばす。
  */
 export function editOps(model: FlowModel, rows: StakeholderRow[], folds: Fold[] = []): ModelOp[] {
   const byId = new Map(model.actors.map((a) => [a.id, a]));
@@ -59,7 +58,6 @@ export function editOps(model: FlowModel, rows: StakeholderRow[], folds: Fold[] 
     if (r.kind !== a.kind) patch.kind = r.kind;
     if (r.role !== a.role) patch.role = r.role ?? null;
     if (r.focus !== a.focus) patch.focus = r.focus ?? null;
-    if (r.present !== a.present) patch.present = r.present ?? null;
     if (!sameList(r.members, a.members)) patch.members = r.members ?? [];
     if (!sameList(r.aliases, a.aliases)) patch.aliases = r.aliases ?? [];
     if (text(r.product) !== a.product) patch.product = text(r.product) ?? null;
@@ -79,7 +77,6 @@ export function editOps(model: FlowModel, rows: StakeholderRow[], folds: Fold[] 
     const actor: Omit<Actor, "lane" | "addedAtRev"> = { id, name: r.name.trim(), kind: r.kind, aliases: r.aliases ?? [] };
     if (r.role) actor.role = r.role;
     if (r.focus) actor.focus = true;
-    if (r.present !== undefined) actor.present = r.present;
     if (r.members && r.members.length > 0) actor.members = r.members;
     if (text(r.product)) actor.product = text(r.product);
     if (text(r.note)) actor.note = text(r.note);
@@ -122,7 +119,7 @@ export function removeNotice(model: FlowModel, row: StakeholderRow): string | nu
   return `削除すると、削除したステップ${names}も一緒に完全に消えます（元に戻せなくなります）。`;
 }
 
-/** 会議画面で登場人物を手直しする。会話の途中で出てきた人に、起点・終点・出席を付けられる。 */
+/** 登場人物を並べ、手直しする。起点・終点・中心・部署のメンバー・付箋もここで付ける。 */
 export function ActorEditDialog({ model, onSave }: { model: FlowModel; onSave: (ops: ModelOp[]) => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   const [rows, setRows] = useState<StakeholderRow[]>([]);
@@ -153,7 +150,7 @@ export function ActorEditDialog({ model, onSave }: { model: FlowModel; onSave: (
 
   return (
     <>
-      {/* 会議中に新しい関係者が分かったときにも押すので、目立つ Aqua のボタンにする。
+      {/* 図を描き始める入口なので、目立つ Aqua のボタンにする。
           登場人物が 0 人なら、まずここから始めてほしいので、青く脈動させて光の輪で誘う */}
       <button
         type="button"
@@ -163,8 +160,8 @@ export function ActorEditDialog({ model, onSave }: { model: FlowModel; onSave: (
         onClick={open}
         title={
           empty
-            ? "業務に関わる人・部署・システムを、会話の前に登録します"
-            : "登場人物を追加したり、名前・種別・製品名・呼び方・起点/終点・出席・並び順を直したりします"
+            ? "業務に関わる人・部署・システムを登録します"
+            : "登場人物を追加したり、名前・種別・製品名・呼び方・起点/終点・並び順を直したりします"
         }
       >
         <svg

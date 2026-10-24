@@ -2,7 +2,7 @@ import { visibleSteps } from "@/lib/render/mermaid";
 import type { Branch, FlowModel, ModelOp, Step, StepId } from "./types";
 
 /**
- * 分岐（枠）を手で組み立てる ops。純粋関数（/editor の分岐の操作。後で音声からも同じ関数を使う）。
+ * 分岐（枠）を手で組み立てる ops。純粋関数（編集画面の分岐の操作）。
  * 枠は先に空で作り（addFrameOps）、あとから場合ごとにステップを足す（add-step.ts の into）。
  *
  * 枠は「図の並びで連続しているステップ」を囲んで描かれる（toMermaid）。同じ枠（groupId）の

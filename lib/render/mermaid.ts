@@ -4,7 +4,7 @@ import type { Actor, Branch, FlowModel, Step } from "@/lib/model/types";
  * FlowModel → Mermaid の sequenceDiagram。
  *
  * 意図的に使わない構文: `activate` / `deactivate` と `->>+` / `-->>-`。
- * 入れ子が 1 箇所でも崩れると図全体が描画不能になり、会議中に育てる用途では事故が多すぎる。
+ * 入れ子が 1 箇所でも崩れると図全体が描画不能になり、手で何度も組み替える用途では事故が多すぎる。
  * 矢印は「同期 ->> / 非同期 -) / 返答 -->>」に限定して安定を取る。
  */
 
@@ -40,7 +40,7 @@ function safeId(id: string): string {
 }
 
 /**
- * ops-grill の掘り下げ軸（例外・暗黙知・属人化）を、ステップ名の末尾に付ける記号。
+ * 掘り下げの観点（例外・暗黙知・属人化）を、ステップ名の末尾に付ける記号。
  * 図の上で「ここは聞き足りない」が見えるようにする。Mermaid と drawio で共通。
  */
 export function flagSuffix(step: Step): string {
@@ -108,12 +108,12 @@ export type MermaidOptions = {
   /** ステップ名の後ろに担当者を付ける（「フローを入力する（田中）」）。画面の表示用。既定は付けない */
   assignees?: boolean;
   /**
-   * 中にステップが無い場合（空の枠）に「＋ ここにステップを追加」の注記を描く。/editor の画面用。
+   * 中にステップが無い場合（空の枠）に「＋ ここにステップを追加」の注記を描く。編集画面用。
    * 書き出し（.mmd）には描かない（空の場合は、条件だけの空の枠になる）
    */
   placeholders?: boolean;
   /**
-   * 畳む枠（Branch.groupId）。畳んだ枠は中身を描かず、「▸ alt 条件／条件（3 手順）」の注記 1 つにする。/editor の画面用。
+   * 畳む枠（Branch.groupId）。畳んだ枠は中身を描かず、「▸ alt 条件／条件（3 手順）」の注記 1 つにする。編集画面用。
    * ただし中心の登場人物（focusActorOf）が関わる手順がある枠は、枠を残してその手順だけを描き、
    * ほかの手順を「▸ …」の注記 1 つにまとめる（frameStates）。
    * 隠した手順の番号は詰めずに、元の番号のまま描く（autonumber を振り直す）

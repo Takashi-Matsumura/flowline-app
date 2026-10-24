@@ -8,7 +8,7 @@ const TEXT: Record<NoteTarget["kind"], { title: string; placeholder: string; hin
   step: {
     title: "付箋（チームで決めること）",
     placeholder: "例: 何があれば「不備あり」とするか",
-    hint: "判断の基準など、図の流れとは別に決めておくことを書きます。まだ決まっていない付箋は、次の会議で AI が聞きます。",
+    hint: "判断の基準など、図の流れとは別に決めておくことを書きます。まだ決まっていない付箋は、業務分掌の「未決事項」に載ります。",
   },
   frame: {
     title: "枠の付箋",
@@ -28,7 +28,7 @@ const btn =
 
 /**
  * 手順・枠・登場人物に貼る付箋（チームで決めること）の欄。答えを書くと「決まりごと」になる。
- * 付箋は論点として残るので、まだ決まっていないものは次の会議で AI が聞く（lib/model/notes.ts）。
+ * 付箋は論点として残るので、まだ決まっていないものは業務分掌の「未決事項」に載る（lib/model/notes.ts）。
  * `inline` なら見出しを小さくし、ほかの欄（分岐の欄・登場人物の設定）の中に置けるようにする
  */
 export function NotesSection({
@@ -103,7 +103,7 @@ function NoteCard({ note, onCommit }: { note: OpenIssue; onCommit: (ops: ModelOp
         >
           {decided ? "決まり" : "未決"}
         </span>
-        <p className="min-w-0 flex-1 text-xs leading-relaxed">{note.prompt?.text ?? note.question}</p>
+        <p className="min-w-0 flex-1 text-xs leading-relaxed">{note.question}</p>
         <button
           type="button"
           aria-label="付箋を外す"

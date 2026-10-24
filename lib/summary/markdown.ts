@@ -10,7 +10,7 @@ import type { SummaryProse } from "./prose";
  *
  * **事実の部分（関係者・ステップ・図・論点）はモデルからコードで作る**。gemma が書くのは
  * 「概要」と「改善候補」だけ（lib/summary/generate.ts）。表の中身を gemma に書かせると、
- * 発話に無い担当者や手順が紛れ込むため。確度の低い項目には印を付ける。
+ * 図に無い担当者や手順が紛れ込むため。仮の手順には印を付ける。
  */
 
 const KIND_LABEL: Record<Actor["kind"], string> = {
@@ -31,13 +31,6 @@ const MESSAGE_LABEL: Record<Step["kind"], string> = {
   async: "通知",
   reply: "返答",
   self: "自己完結",
-};
-
-const ISSUE_STATUS: Record<OpenIssue["status"], string> = {
-  open: "未確認",
-  asked: "質問済み",
-  answered: "回答済み",
-  parked: "保留",
 };
 
 const ISSUE_KIND: Record<OpenIssue["kind"], string> = {
@@ -100,8 +93,6 @@ export function table(header: string[], rows: string[][]): string[] {
   const row = (cells: string[]) => `| ${cells.map(pad).join(" | ")} |`;
   return [row(header), `| ${widths.map((w) => "-".repeat(w)).join(" | ")} |`, ...rows.map(row)];
 }
-
-const mark = (n: number) => n.toFixed(2);
 
 export function buildSummaryMarkdown(
   model: FlowModel,
@@ -240,8 +231,8 @@ export function buildSummaryMarkdown(
       lines.push("### 未決事項", "");
       lines.push(
         ...table(
-          ["対象", "種別", "決めること", "状態"],
-          pending.map((i) => [cell(whereOf.get(i.id) ?? "全体"), ISSUE_KIND[i.kind], cell(i.prompt?.text ?? i.question), ISSUE_STATUS[i.status]]),
+          ["対象", "種別", "決めること"],
+          pending.map((i) => [cell(whereOf.get(i.id) ?? "全体"), ISSUE_KIND[i.kind], cell(i.question)]),
         ),
         "",
       );
@@ -251,7 +242,7 @@ export function buildSummaryMarkdown(
       lines.push(
         ...table(
           ["対象", "種別", "決めたこと", "答え"],
-          decided.map((i) => [cell(whereOf.get(i.id) ?? "全体"), ISSUE_KIND[i.kind], cell(i.prompt?.text ?? i.question), cell(i.answer ?? "")]),
+          decided.map((i) => [cell(whereOf.get(i.id) ?? "全体"), ISSUE_KIND[i.kind], cell(i.question), cell(i.answer ?? "")]),
         ),
         "",
       );
@@ -294,10 +285,9 @@ export function buildSummaryMarkdown(
   } else {
     lines.push(
       ...table(
-        ["#", "送り手", "担当", "受け手", "内容", "種別", "条件", "渡すもの", "承認者", "確度"],
+        ["#", "送り手", "担当", "受け手", "内容", "種別", "条件", "渡すもの", "承認者", "状態"],
         steps.map((s, i) => {
           const b = branchOf(s.branchId);
-          const certainty = s.status === "provisional" ? `**仮** ${mark(s.confidence)}` : mark(s.confidence);
           return [
             String(i + 1),
             cell(nameOf(s.from)),
@@ -308,7 +298,7 @@ export function buildSummaryMarkdown(
             cell(b ? `${b.kind} ${b.condition}` : ""),
             cell(s.artifact ?? ""),
             cell(s.approver ? nameOf(s.approver) : ""),
-            certainty,
+            s.status === "provisional" ? "**仮**" : "",
           ];
         }),
       ),

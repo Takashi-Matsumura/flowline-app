@@ -8,7 +8,7 @@ import { NotesSection } from "./notes-section";
 
 /**
  * 図の番号をクリックしたときに、図の横（狭い画面では下）に開く、ステップの手直し。
- * 人は言い間違えるので、音声で足したステップを、名前・送り手・受け手・確定/仮・順番・削除で直せるようにする。
+ * 名前・送り手・受け手・確定/仮・順番・削除を直せるようにする。
  *
  * 図を覆わない（モーダルにしない）。選んだステップは図で強調するので、順番を動かすと強調ごと動くのが見える。
  * 変更はその場で反映する（名前は入力を確定したとき＝Enter かフォーカスを外したとき）。
@@ -19,7 +19,6 @@ export function StepPanel({
   onClose,
   onCommit,
   onPreview,
-  onFocus,
   children,
 }: {
   model: FlowModel;
@@ -32,9 +31,7 @@ export function StepPanel({
    * 確定は今までどおり Enter か欄を離れたとき（1 文字ごとに元に戻すの履歴を積まないように）
    */
   onPreview?: (ops: ModelOp[] | null) => void;
-  /** 渡すと「声で直す」を出す。このステップを、番号を言わずに音声で直す対象にする */
-  onFocus?: (stepId: string) => void;
-  /** 「状態」の下に足す欄（/editor の分岐の操作など）。PanelSection で包むと見た目が揃う */
+  /** 「状態」の下に足す欄（分岐の操作など）。PanelSection で包むと見た目が揃う */
   children?: ReactNode;
 }) {
   const steps = visibleSteps(model);
@@ -252,7 +249,7 @@ export function StepPanel({
                   className="rounded px-3 py-1 text-sm text-zinc-600 aria-pressed:bg-sky-600 aria-pressed:text-white dark:text-zinc-300"
                   onClick={() =>
                     confirmed !== value &&
-                    update(value ? { status: "confirmed", confidence: 1 } : { status: "provisional" })
+                    update({ status: value ? "confirmed" : "provisional" })
                   }
                 >
                   {text}
@@ -288,19 +285,6 @@ export function StepPanel({
         >
           ↓
         </button>
-        {onFocus && (
-          <button
-            type="button"
-            className={btn}
-            title="このステップを、番号を言わずに声で直せるようにします"
-            onClick={() => {
-              onFocus(step.id);
-              onClose();
-            }}
-          >
-            声で直す
-          </button>
-        )}
         <span className="flex-1" />
         {confirmingDelete === step.id ? (
           <>

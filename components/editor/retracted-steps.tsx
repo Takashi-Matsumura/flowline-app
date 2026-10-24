@@ -13,7 +13,7 @@ const restoreBtn =
   "shrink-0 rounded-md border border-black/15 px-2 py-0.5 text-xs hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10";
 
 /**
- * 図の下段の「削除したステップ」。マウス・音声の訂正・要対応の却下で消したステップを、
+ * 図の下段の「削除したステップ」。ステップの編集パネルや点検で消したステップを、
  * あとからでも元に戻せるようにする。戻すと元の位置（order）と、消す前の確定/仮に戻る。
  */
 export function RetractedSteps({ model, onCommit }: { model: FlowModel; onCommit: (ops: ModelOp[]) => void }) {
@@ -53,8 +53,7 @@ export function RetractedSteps({ model, onCommit }: { model: FlowModel; onCommit
 const NOTICE_MS = 10_000;
 
 /**
- * ステップが消えた直後に「◯◯を削除しました［元に戻す］」を出す。消した経路（マウス・音声の訂正・
- * 要対応の却下）を問わず、モデルの変化から検知する。開いた時点ですでに消えていたものは出さない。
+ * ステップが消えた直後に「◯◯を削除しました［元に戻す］」を出す。消した経路を問わず、モデルの変化から検知する。開いた時点ですでに消えていたものは出さない。
  */
 export function RetractNotice({ model, onCommit }: { model: FlowModel; onCommit: (ops: ModelOp[]) => void }) {
   const ids = model.steps.filter((s) => s.status === "retracted").map((s) => s.id);

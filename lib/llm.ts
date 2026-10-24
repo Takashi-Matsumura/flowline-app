@@ -6,7 +6,7 @@
  * - **思考（reasoning）は既定で止める**。gemma は既定だと短い JSON を返すのにも
  *   約 200 トークンの思考を挟み、実測で 14 秒かかった（止めると 1.3 秒・9 トークン）。
  *   ステップ名のような短い出力に思考は要らない。
- * - 全体の上限（totalTimeoutMs）も別に持つ。会議中に生成が詰まっても図を待たせないため。
+ * - 全体の上限（totalTimeoutMs）も別に持つ。生成が詰まっても画面を待たせないため。
  */
 
 export type LlmMessage = { role: "system" | "user" | "assistant"; content: string };

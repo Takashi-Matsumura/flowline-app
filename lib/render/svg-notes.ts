@@ -135,7 +135,7 @@ export function addNotesToSvg(svg: string, model: FlowModel): string {
   noted.forEach(({ note, where }, i) => {
     const state = noteState(note);
     const lines = [
-      ...wrap(`決めること: ${note.prompt?.text ?? note.question}`),
+      ...wrap(`決めること: ${note.question}`),
       ...wrap(`決まったこと: ${state === "answered" ? (note.answer ?? "") : "（未決）"}`),
     ];
     const h = PAD + LINE_H * (lines.length + 1) + 4;

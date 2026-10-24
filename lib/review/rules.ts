@@ -2,7 +2,7 @@ import type { Branch, FlowModel, Step } from "@/lib/model/types";
 import { drawnFrames, flowItems, visibleSteps } from "@/lib/render/mermaid";
 
 /**
- * 業務フロー図の点検（/editor の「点検」パネル）。純関数。
+ * 業務フロー図の点検（編集画面の「点検」パネル）。純関数。
  *
  * チームで描いた図には、描いた本人たちが気づきにくい抜けが残る。ここではコードで確実に言えるもの
  * （書き方の作法・流れの行き止まり・前提の空欄など）を拾う。業務として抜けていそうな手順のような、

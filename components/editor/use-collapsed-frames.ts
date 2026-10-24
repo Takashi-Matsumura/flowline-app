@@ -3,14 +3,14 @@
 import { useCallback, useSyncExternalStore } from "react";
 
 /**
- * /editor の図で畳んでいる枠（Branch.groupId）。図ごとに、このブラウザの `localStorage` に覚えさせる。
+ * 図で畳んでいる枠（Branch.groupId）。図ごとに、このブラウザの `localStorage` に覚えさせる。
  * 畳むのは画面の見え方だけなので、図のデータ（FlowModel）には入れない。
  *
  * `useReviewWidth`（use-review-width.ts）と同じ作法: `useSyncExternalStore` でサーバーの描画を必ず
  * 「何も畳まない」にし、クライアントでは保存値を読む。他のタブとも `storage` イベントで同期する。
  */
 
-const PREFIX = "grilljev:collapsed:";
+const PREFIX = "flowline:collapsed:";
 
 const EMPTY: ReadonlySet<string> = new Set();
 

@@ -152,15 +152,6 @@ body {
   outline-offset: 3px;
 }
 
-/* 録音中（止めるボタン）は赤いジェル */
-.aqua-button--red {
-  --aqua-top: #ff7a73;
-  --aqua-mid: #d9271e;
-  --aqua-bottom: #ff9c8a;
-  --aqua-edge: #9c1610;
-  --aqua-glow: 217 39 30;
-}
-
 /* 押せないときはグラファイト（灰色のジェル）。光沢は残して、色だけ抜く */
 .aqua-button:disabled {
   --aqua-top: #c9cdd3;
@@ -177,15 +168,7 @@ body {
   cursor: default;
 }
 
-/* 既定のボタンの脈動（Aqua の「Return で押されるボタン」がゆっくり明滅する動き） */
-.aqua-button--pulse:not(:disabled) {
-  animation: aqua-pulse 1.6s ease-in-out infinite;
-}
-
-.aqua-button--pulse:active:not(:disabled) {
-  animation: none;
-}
-
+/* 脈動（Aqua の「Return で押されるボタン」がゆっくり明滅する動き）。誘導（--beckon）で使う */
 @keyframes aqua-pulse {
   0%,
   100% {
@@ -242,7 +225,6 @@ body {
   .aqua-button::after {
     transition: none;
   }
-  .aqua-button--pulse:not(:disabled),
   .aqua-button--beckon:not(:disabled) {
     animation: none;
   }

@@ -58,10 +58,9 @@ type Panel =
 const SAVE_LABEL = { saved: "保存済み", saving: "保存中…", error: "保存できていません" } as const;
 
 /**
- * 手で業務フロー図を描くエディタ（/editor/[slug]）。
+ * 手で業務フロー図を描くエディタ（/[slug]）。
  *
- * 図の変更はすべて ModelOp にして applyOps に通す（会議画面と同じ入口）。
- * 後で音声から操作するときは、同じ ops を作る経路を足せばよい。
+ * 図の変更はすべて ModelOp にして applyOps に通す。
  * applyOps は純粋関数なので、元に戻す / やり直しはモデルを丸ごと積んで実現する。
  */
 export function Editor({ slug, name, initial }: { slug: string; name: string; initial: FlowModel }) {

@@ -4,7 +4,7 @@ import { PLACEHOLDER_TEXT } from "./mermaid";
  * 書き出し用の小さな純関数（ファイル名と SVG の整形）。ダウンロード自体はブラウザ側（component）で行う。
  */
 
-/** svg11 = SVG 1.1 に揃えた .svg（Canva など、CSS を読まない取り込み先向け。app/components/svg11.ts） */
+/** svg11 = SVG 1.1 に揃えた .svg（Canva など、CSS を読まない取り込み先向け。components/diagram/svg11.ts） */
 export type ExportFormat = "drawio" | "mmd" | "svg" | "svg11" | "md";
 
 export const EXPORT_MIME: Record<ExportFormat, string> = {

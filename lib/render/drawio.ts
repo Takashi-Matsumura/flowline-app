@@ -158,7 +158,7 @@ export function toDrawio(model: FlowModel, at: string = new Date().toISOString()
   }
 
   return (
-    `<mxfile host="grilljev" modified="${plain(at)}" agent="grilljev-demo" version="24.0.0">\n` +
+    `<mxfile host="flowline" modified="${plain(at)}" agent="flowline-app" version="24.0.0">\n` +
     `  <diagram id="d1" name="${plain(model.scope.title || "業務フロー")}">\n` +
     `    <mxGraphModel dx="1200" dy="800" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" ` +
     `arrows="1" fold="1" page="1" pageScale="1" pageWidth="${num(lay.width)}" pageHeight="${num(lay.height)}" ` +
