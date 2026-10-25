@@ -10,41 +10,43 @@ const DEBOUNCE_MS = 1_500;
 /**
  * 図を、変更のあとしばらく静かになってから自動保存する。
  * - 保存は 1 本ずつ（前の保存が終わってから次を送る。古い内容が新しい内容を上書きしない）
- * - 開いた直後（読み込んだ内容そのまま）は保存しない
+ * - 保存済みの内容（開いた直後に読み込んだ内容を含む）と同じなら保存しない。
+ *   「初回の effect だけ飛ばす」作りにすると、開発時の Strict Mode が effect を 2 回走らせるため、
+ *   開いただけで保存され更新日時（一覧の並び順）が変わってしまう
  * - 失敗したら「保存できていない」を表示し、次の変更でまた試す
  */
 export function useDiagramAutosave(slug: string, model: FlowModel) {
   const [status, setStatus] = useState<SaveStatus>("saved");
-  const first = useRef(true);
+  /** 最後に保存した（または読み込んだ）モデル。モデルは不変なので参照で比べる */
+  const saved = useRef(model);
   const latest = useRef(model);
   const inflight = useRef(false);
-  const dirty = useRef(false);
 
   useEffect(() => {
     latest.current = model;
-    if (first.current) {
-      first.current = false;
+    // 元に戻すなどで保存済みの内容に戻ったら、送るものは無い（送っている最中なら、終わったあと戻した内容を送る）
+    if (model === saved.current && !inflight.current) {
+      setStatus("saved");
       return;
     }
-    dirty.current = true;
     setStatus("saving");
 
     async function flush() {
-      if (inflight.current) return; // 終わったら dirty を見て続ける
+      if (inflight.current) return; // 送っている保存が終わったら、最新の内容まで続けて送る
       inflight.current = true;
       try {
-        while (dirty.current) {
-          dirty.current = false;
+        while (latest.current !== saved.current) {
+          const sending = latest.current;
           const res = await fetch(`/api/diagrams/${slug}`, {
             method: "PUT",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ model: latest.current }),
+            body: JSON.stringify({ model: sending }),
           });
           if (!res.ok) throw new Error(String(res.status));
+          saved.current = sending;
         }
         setStatus("saved");
       } catch {
-        dirty.current = true;
         setStatus("error");
       } finally {
         inflight.current = false;
