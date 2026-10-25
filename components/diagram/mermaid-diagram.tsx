@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { PlayMark } from "@/lib/preview/scenes";
 import type { NoteMarks, NoteState } from "@/lib/model/notes";
+import { currentTheme, useTheme } from "@/lib/theme";
 import { NoteOverlay, noteKey, type NoteAnchor } from "./note-overlay";
 import { COLLAPSED_MARK, FOCUS_COMMENT, PLACEHOLDER_TEXT, type ArmTarget } from "@/lib/render/mermaid";
 
@@ -11,15 +12,7 @@ type MermaidApi = typeof import("mermaid").default;
 /** 初期バンドルに入れない。最初の描画時に 1 回だけ読み込む。 */
 let mermaidPromise: Promise<MermaidApi> | null = null;
 function loadMermaid(): Promise<MermaidApi> {
-  mermaidPromise ??= import("mermaid").then((m) => {
-    const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    m.default.initialize({
-      startOnLoad: false,
-      securityLevel: "strict",
-      theme: dark ? "dark" : "default",
-    });
-    return m.default;
-  });
+  mermaidPromise ??= import("mermaid").then((m) => m.default);
   return mermaidPromise;
 }
 
@@ -586,6 +579,12 @@ function polishSvg(svg: string, code: string): string {
 
 /** Mermaid で描き、見た目を整える */
 async function renderSvg(mermaid: MermaidApi, code: string): Promise<string> {
+  // 配色はライト／ダークを切り替えられるので、描くたびに今の配色で設定し直す
+  mermaid.initialize({
+    startOnLoad: false,
+    securityLevel: "strict",
+    theme: currentTheme() === "dark" ? "dark" : "default",
+  });
   renderSeq += 1;
   return polishSvg((await mermaid.render(`mermaid-${renderSeq}`, code)).svg, code);
 }
@@ -679,6 +678,8 @@ export function MermaidDiagram({
     onSvgRef.current = onSvg;
   });
   const [failed, setFailed] = useState<{ for: string; message: string } | null>(null);
+  /** ライト／ダークを切り替えたら、図をその配色で描き直す */
+  const theme = useTheme();
   const svgHostRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<Drag | null>(null);
   /** ドラッグを終えた直後の click は、ステップを選ぶ操作として扱わない */
@@ -739,7 +740,7 @@ export function MermaidDiagram({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [code]);
+  }, [code, theme]);
 
   // 強調するステップが変わったら、見えるところまでスクロールする（見えていれば動かない）
   const shownFocusRef = useRef(0);

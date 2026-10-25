@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* dark: は OS の設定ではなく <html> の dark クラスで効かせる（ライト／ダークを画面で切り替えるため。lib/theme.ts） */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -36,13 +39,11 @@
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-    /* スクロールバー・select の選択肢・チェックボックスなど、ブラウザ標準の部品も暗くする */
-    color-scheme: dark;
-  }
+:root.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  /* スクロールバー・select の選択肢・チェックボックスなど、ブラウザ標準の部品も暗くする */
+  color-scheme: dark;
 }
 
 body {
@@ -238,10 +239,8 @@ body {
 .flow-play {
   --play-accent: #0284c7;
 }
-@media (prefers-color-scheme: dark) {
-  .flow-play {
-    --play-accent: #38bdf8;
-  }
+.dark .flow-play {
+  --play-accent: #38bdf8;
 }
 /* :where で詳細度を 0 にする（:is だと rect.actor の分だけ強くなり、[data-play] の側が負ける） */
 .flow-play

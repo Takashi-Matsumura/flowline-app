@@ -6,6 +6,8 @@ import { ActorEditDialog } from "./actor-edit-dialog";
 import { ExportButtons } from "@/components/diagram/export-buttons";
 import { MermaidDiagram, renderMermaidSvg } from "@/components/diagram/mermaid-diagram";
 import { noteKeys } from "@/components/diagram/note-overlay";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { useTheme } from "@/lib/theme";
 import { RetractedSteps, RetractNotice } from "./retracted-steps";
 import { StepPanel } from "./step-panel";
 import { SummaryButton } from "@/components/summary/summary-dialog";
@@ -189,6 +191,8 @@ export function Editor({
     [model, showAssignees],
   );
   const [expanded, setExpanded] = useState<{ svg: string; code: string } | null>(null);
+  // 書き出す .svg も画面と同じ配色にするので、ライト／ダークを切り替えたら描き直す
+  const theme = useTheme();
   useEffect(() => {
     if (exportCode === displayCode) return;
     let cancelled = false;
@@ -204,7 +208,7 @@ export function Editor({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [exportCode, displayCode]);
+  }, [exportCode, displayCode, theme]);
   const svgForExport =
     exportCode === displayCode
       ? rendered && rendered.code === displayCode
@@ -502,6 +506,9 @@ export function Editor({
         <RetractedSteps model={model} onCommit={commit} />
         <SummaryButton model={model} empty={!drawable} readiness={readiness} />
         <ExportButtons model={model} mermaidCode={code} svg={svgForExport} empty={!drawable} />
+        <span className="ml-auto">
+          <ThemeToggle />
+        </span>
       </div>
       {previewing && <FlowPlayer name={name} model={model} onClose={() => setPreviewing(false)} />}
     </div>

@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { InlineScript } from "@/components/ui/inline-script";
+import { THEME_INIT_SCRIPT } from "@/lib/theme-script";
 import "./globals.css";
 
 /**
@@ -38,7 +40,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="ja"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      // 配色の dark クラスは、描画前のスクリプトが付ける（サーバーの描画とは食い違って当然）
+      suppressHydrationWarning
     >
+      <head>
+        {/* 選んだ配色（無ければ OS の設定）を、最初の描画より前に当てる。lib/theme-script.ts */}
+        <InlineScript html={THEME_INIT_SCRIPT} />
+      </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

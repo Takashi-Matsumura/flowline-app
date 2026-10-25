@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { connection } from "next/server";
 import { listDiagrams } from "@/lib/store/diagrams";
 import { DiagramList } from "./diagram-list";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 export default function Home() {
   return (
@@ -13,6 +14,9 @@ export default function Home() {
       <Suspense fallback={<p className="px-4 py-6 text-sm text-zinc-500">読み込み中…</p>}>
         <Diagrams />
       </Suspense>
+      <footer className="mt-auto flex justify-end border-t border-black/10 px-4 py-2 dark:border-white/15">
+        <ThemeToggle />
+      </footer>
     </div>
   );
 }
