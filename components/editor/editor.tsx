@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActorEditDialog } from "./actor-edit-dialog";
 import { ExportButtons } from "@/components/diagram/export-buttons";
 import { MermaidDiagram, renderMermaidSvg } from "@/components/diagram/mermaid-diagram";
+import { noteKeys } from "@/components/diagram/note-overlay";
 import { RetractedSteps, RetractNotice } from "./retracted-steps";
 import { StepPanel } from "./step-panel";
 import { SummaryButton } from "@/components/summary/summary-dialog";
@@ -173,6 +174,10 @@ export function Editor({
   const shownModel = useMemo(() => (preview ? applyOps(model, preview, model.updatedAt) : model), [model, preview]);
   // 付箋（手順・枠・登場人物に結び付いた論点）の印。図のそれぞれの横に出す
   const notes = useMemo(() => noteMarks(shownModel, foldedSet), [shownModel, foldedSet]);
+  // 図に重ねた付箋のうち、中身を開いているもの。ツールバーの「付箋をすべて開く／閉じる」でまとめて変える
+  const [openNotes, setOpenNotes] = useState<ReadonlySet<string>>(new Set());
+  const allNotes = noteKeys(notes);
+  const allNotesOpen = allNotes.length > 0 && allNotes.every((k) => openNotes.has(k));
   // 画面の図には、空の場合に「＋ ここにステップを追加」を描く（書き出す .svg からは外す）
   const displayCode = useMemo(
     () => toMermaid(shownModel, { assignees: showAssignees, placeholders: true, collapsed: foldedSet }),
@@ -357,6 +362,16 @@ export function Editor({
         <span className="flex-1" />
         {drawable && (
           <div className="flex items-center gap-1">
+            {allNotes.length > 0 && (
+              <button
+                type="button"
+                className="mr-2 rounded-md px-2 py-1 text-xs text-zinc-600 hover:bg-black/5 dark:text-zinc-400 dark:hover:bg-white/10"
+                title={`図の付箋をすべて${allNotesOpen ? "閉じます" : "開きます"}（図のアイコンを押すと 1 つずつ開けます）`}
+                onClick={() => setOpenNotes(allNotesOpen ? new Set() : new Set(allNotes))}
+              >
+                {allNotesOpen ? "付箋を閉じる" : "付箋を開く"}
+              </button>
+            )}
             {frames.length > 0 && (
               <button
                 type="button"
@@ -409,6 +424,8 @@ export function Editor({
                 onFrameNotes={openFrameNotes}
                 selectedStep={selectedIndex + 1}
                 notes={notes}
+                openNotes={openNotes}
+                onOpenNotesChange={setOpenNotes}
                 highlightStep={panel?.mode === "review" ? panel.focus : 0}
                 // 1 = 幅に合わせる（小さい図は拡大しない）。それ以外は幅に対する倍率
                 zoom={zoom === 1 ? undefined : zoom}
