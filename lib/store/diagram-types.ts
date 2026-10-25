@@ -13,6 +13,8 @@ export type DiagramFile = {
   createdAt: string;
   updatedAt: string;
   model: FlowModel;
+  /** 画面で畳んでいる枠（Branch.groupId）。見え方だけなので model とは別に持つ */
+  collapsed: string[];
 };
 
 export type DiagramMeta = {
@@ -31,6 +33,17 @@ export function parseDiagramPatch(v: unknown): DiagramPatch | null {
   if (typeof v !== "object" || v === null) return null;
   const model = (v as Record<string, unknown>).model;
   return isFlowModel(model) ? { model } : null;
+}
+
+/** 畳んでいる枠の数の上限（枠の数より多くはならないので、十分に大きい値） */
+const MAX_COLLAPSED = 200;
+const GROUP_ID_RE = /^[A-Za-z0-9_-]{1,32}$/;
+
+/** 畳んでいる枠の一覧として正しければ、重複を除いて返す。形が合わなければ null */
+export function parseCollapsed(v: unknown): string[] | null {
+  if (!Array.isArray(v) || v.length > MAX_COLLAPSED) return null;
+  if (!v.every((id) => typeof id === "string" && GROUP_ID_RE.test(id))) return null;
+  return [...new Set(v as string[])];
 }
 
 export function toDiagramMeta(file: DiagramFile): DiagramMeta {

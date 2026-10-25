@@ -3,7 +3,7 @@ import type { FlowModel } from "@/lib/model/types";
 import { isFlowModel } from "@/lib/model/guard";
 import { db } from "./db";
 import { isValidSlug, MAX_NAME_CHARS, newSlug } from "./slug";
-import { toDiagramMeta, type DiagramFile, type DiagramMeta, type DiagramPatch } from "./diagram-types";
+import { parseCollapsed, toDiagramMeta, type DiagramFile, type DiagramMeta, type DiagramPatch } from "./diagram-types";
 
 /**
  * 業務フロー図の保存（SQLite の `diagrams` テーブル）。server 専用。
@@ -16,6 +16,7 @@ type Row = {
   created_at: string;
   updated_at: string;
   model: string;
+  collapsed: string;
 };
 
 /** 行 → DiagramFile。JSON が壊れている・形が合わない行は null（壊れた図は飛ばす）。 */
@@ -23,24 +24,40 @@ function rowToFile(row: Row): DiagramFile | null {
   try {
     const model: unknown = JSON.parse(row.model);
     if (!isFlowModel(model)) return null;
-    return { slug: row.slug, name: row.name, createdAt: row.created_at, updatedAt: row.updated_at, model };
+    return {
+      slug: row.slug,
+      name: row.name,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      model,
+      collapsed: readCollapsed(row.collapsed),
+    };
   } catch {
     return null;
   }
 }
 
+/** 畳んでいる枠の列。壊れていても図は開けるよう、何も畳んでいないことにする */
+function readCollapsed(text: string): string[] {
+  try {
+    return parseCollapsed(JSON.parse(text)) ?? [];
+  } catch {
+    return [];
+  }
+}
+
 /** 新しい slug で 1 行足す。model は呼び出し側が作る（作った時刻を受け取る） */
-function insertDiagram(name: string, makeModel: (at: string) => FlowModel): DiagramFile {
+function insertDiagram(name: string, makeModel: (at: string) => FlowModel, collapsed: string[] = []): DiagramFile {
   const at = new Date().toISOString();
   const conn = db();
   // 同じ秒に作っても衝突しないよう、存在しない slug が出るまで引き直す
   for (let i = 0; i < 5; i += 1) {
     const slug = newSlug(new Date());
     if (conn.prepare("SELECT 1 FROM diagrams WHERE slug = ?").get(slug)) continue;
-    const file: DiagramFile = { slug, name, createdAt: at, updatedAt: at, model: makeModel(at) };
+    const file: DiagramFile = { slug, name, createdAt: at, updatedAt: at, model: makeModel(at), collapsed };
     conn
-      .prepare(`INSERT INTO diagrams (slug, name, created_at, updated_at, model) VALUES (?, ?, ?, ?, ?)`)
-      .run(file.slug, file.name, file.createdAt, file.updatedAt, JSON.stringify(file.model));
+      .prepare(`INSERT INTO diagrams (slug, name, created_at, updated_at, model, collapsed) VALUES (?, ?, ?, ?, ?, ?)`)
+      .run(file.slug, file.name, file.createdAt, file.updatedAt, JSON.stringify(file.model), JSON.stringify(collapsed));
     return file;
   }
   throw new Error("図の id を作れませんでした");
@@ -52,7 +69,7 @@ export async function createDiagram(name: string): Promise<DiagramFile> {
 
 /**
  * 保存済みの図のコピーを作る。名前は「〇〇のコピー」（すでにあれば「〇〇のコピー 2」…）。
- * 中身（登場人物・ステップ・分岐）はそのまま写し、業務名（model.scope.title）だけ新しい名前に揃える。
+ * 中身（登場人物・ステップ・分岐）と畳んでいる枠はそのまま写し、業務名（model.scope.title）だけ新しい名前に揃える。
  */
 export async function duplicateDiagram(slug: unknown): Promise<DiagramFile | null> {
   const source = await readDiagram(slug);
@@ -64,7 +81,7 @@ export async function duplicateDiagram(slug: unknown): Promise<DiagramFile | nul
     name = source.name.slice(0, MAX_NAME_CHARS - suffix.length) + suffix;
   }
   const model = structuredClone(source.model);
-  return insertDiagram(name, () => ({ ...model, scope: { ...model.scope, title: name } }));
+  return insertDiagram(name, () => ({ ...model, scope: { ...model.scope, title: name } }), source.collapsed);
 }
 
 /** 書き出したファイルから読み込んだモデルで、新しい図を作る。業務名（model.scope.title）は name に揃える */
@@ -88,6 +105,16 @@ export async function saveDiagram(slug: unknown, patch: DiagramPatch): Promise<D
     .prepare(`UPDATE diagrams SET updated_at = ?, model = ? WHERE slug = ?`)
     .run(next.updatedAt, JSON.stringify(next.model), slug);
   return next;
+}
+
+/**
+ * 畳んでいる枠を保存する。見え方だけの変更なので、更新日時（一覧の並び順）は変えない。
+ * 図が無ければ false。
+ */
+export async function saveCollapsed(slug: unknown, collapsed: string[]): Promise<boolean> {
+  if (!isValidSlug(slug)) return false;
+  const result = db().prepare("UPDATE diagrams SET collapsed = ? WHERE slug = ?").run(JSON.stringify(collapsed), slug);
+  return result.changes > 0;
 }
 
 /** 図の名前を変える。業務名（model.scope.title）も揃える。 */

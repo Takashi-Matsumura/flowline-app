@@ -5,9 +5,9 @@ import path from "node:path";
 /**
  * 保存先の SQLite（`data/flowline.db`。`DATA_DIR` で場所を変えられる。.gitignore 済み）。server 専用。
  *
- * - `diagrams`: 業務フロー図（lib/store/diagrams.ts）
+ * - `diagrams`: 業務フロー図（lib/store/diagrams.ts）。`collapsed` は画面で畳んでいる枠
  *
- * テーブルは起動時に `CREATE TABLE IF NOT EXISTS` で作る（マイグレーションの仕組みは持たない）。
+ * テーブルは起動時に `CREATE TABLE IF NOT EXISTS` で作る（マイグレーションの仕組みは持たず、足した列だけ下で足す）。
  */
 
 let cached: DatabaseSync | null = null;
@@ -26,9 +26,15 @@ export function db(): DatabaseSync {
       name TEXT NOT NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
-      model TEXT NOT NULL
+      model TEXT NOT NULL,
+      collapsed TEXT NOT NULL DEFAULT '[]'
     );
   `);
+  // 画面で畳んでいる枠（collapsed）は後から足した列。それより前に作った DB には足す
+  const columns = conn.prepare("PRAGMA table_info(diagrams)").all() as { name: string }[];
+  if (!columns.some((c) => c.name === "collapsed")) {
+    conn.exec(`ALTER TABLE diagrams ADD COLUMN collapsed TEXT NOT NULL DEFAULT '[]'`);
+  }
   cached = conn;
   return conn;
 }
