@@ -24,7 +24,8 @@ export function ThemeToggle() {
         className={`relative h-4 w-7 rounded-full transition-colors ${dark ? "bg-sky-500" : "bg-zinc-300"}`}
       >
         <span
-          className={`absolute top-0.5 size-3 rounded-full bg-white shadow transition-transform ${
+          // left-0 を付けないと、ボタン既定の text-align: center でトラックの中央が起点になり、右へはみ出す
+          className={`absolute top-0.5 left-0 size-3 rounded-full bg-white shadow transition-transform ${
             dark ? "translate-x-3.5" : "translate-x-0.5"
           }`}
         />
