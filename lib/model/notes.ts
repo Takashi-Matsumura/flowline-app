@@ -36,35 +36,43 @@ function stateOf(notes: OpenIssue[]): NoteState | undefined {
   return notes.every((n) => noteState(n) === "answered") ? "answered" : "open";
 }
 
+/** 図の 1 か所に貼られた付箋の束。state は束としての印（stateOf）、notes は中身（オーバーレイで開いて見せる） */
+export type NoteMark = { state: NoteState; notes: OpenIssue[] };
+
+function markOf(notes: OpenIssue[]): NoteMark | undefined {
+  const state = stateOf(notes);
+  return state && { state, notes };
+}
+
 /**
  * 図に出す付箋の印。手順は図の番号（1 始まり）、枠は図に描いた枠の順（0 始まり。drawnFrames）、登場人物は id。
  * folds は畳んだ枠の「▸ …」の注記の順（0 始まり。collapsedFrames）: 隠した手順の付箋と、
  * 注記 1 つに畳んだ枠ならその枠の付箋（畳むと、それらの印が図から消えて気づけなくなるため）
  */
 export type NoteMarks = {
-  steps: ReadonlyMap<number, NoteState>;
-  frames: ReadonlyMap<number, NoteState>;
-  actors: ReadonlyMap<ActorId, NoteState>;
-  folds: ReadonlyMap<number, NoteState>;
+  steps: ReadonlyMap<number, NoteMark>;
+  frames: ReadonlyMap<number, NoteMark>;
+  actors: ReadonlyMap<ActorId, NoteMark>;
+  folds: ReadonlyMap<number, NoteMark>;
 };
 
 export function noteMarks(model: FlowModel, collapsed?: ReadonlySet<string>): NoteMarks {
-  const steps = new Map<number, NoteState>();
+  const steps = new Map<number, NoteMark>();
   visibleSteps(model).forEach((s, i) => {
-    const st = stateOf(notesOf(model, s.id));
-    if (st) steps.set(i + 1, st);
+    const mark = markOf(notesOf(model, s.id));
+    if (mark) steps.set(i + 1, mark);
   });
-  const frames = new Map<number, NoteState>();
+  const frames = new Map<number, NoteMark>();
   drawnFrames(model, collapsed).forEach((arms, i) => {
-    const st = stateOf(notesOn(model, { kind: "frame", id: arms[0].groupId }));
-    if (st) frames.set(i, st);
+    const mark = markOf(notesOn(model, { kind: "frame", id: arms[0].groupId }));
+    if (mark) frames.set(i, mark);
   });
-  const actors = new Map<ActorId, NoteState>();
+  const actors = new Map<ActorId, NoteMark>();
   for (const a of model.actors) {
-    const st = stateOf(notesOn(model, { kind: "actor", id: a.id }));
-    if (st) actors.set(a.id, st);
+    const mark = markOf(notesOn(model, { kind: "actor", id: a.id }));
+    if (mark) actors.set(a.id, mark);
   }
-  const folds = new Map<number, NoteState>();
+  const folds = new Map<number, NoteMark>();
   if (collapsed) {
     hiddenByFold(model, collapsed).forEach(({ groupId, folded, stepIds }, k) => {
       const notes = [
@@ -73,8 +81,8 @@ export function noteMarks(model: FlowModel, collapsed?: ReadonlySet<string>): No
           ...stepIds.flatMap((id) => notesOf(model, id)),
         ]),
       ];
-      const st = stateOf(notes);
-      if (st) folds.set(k, st);
+      const mark = markOf(notes);
+      if (mark) folds.set(k, mark);
     });
   }
   return { steps, frames, actors, folds };
