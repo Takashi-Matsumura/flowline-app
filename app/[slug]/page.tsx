@@ -16,5 +16,5 @@ async function DiagramEditor({ params }: Pick<PageProps<"/[slug]">, "params">) {
   const diagram = await readDiagram(slug);
   if (!diagram) notFound();
 
-  return <Editor slug={diagram.slug} name={diagram.name} initial={diagram.model} />;
+  return <Editor slug={diagram.slug} name={diagram.name} initial={diagram.model} initialCollapsed={diagram.collapsed} />;
 }

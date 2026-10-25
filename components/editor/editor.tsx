@@ -63,7 +63,17 @@ const SAVE_LABEL = { saved: "保存済み", saving: "保存中…", error: "保�
  * 図の変更はすべて ModelOp にして applyOps に通す。
  * applyOps は純粋関数なので、元に戻す / やり直しはモデルを丸ごと積んで実現する。
  */
-export function Editor({ slug, name, initial }: { slug: string; name: string; initial: FlowModel }) {
+export function Editor({
+  slug,
+  name,
+  initial,
+  initialCollapsed,
+}: {
+  slug: string;
+  name: string;
+  initial: FlowModel;
+  initialCollapsed: readonly string[];
+}) {
   const [history, setHistory] = useState<History>({ past: [], present: initial, future: [] });
   const model = history.present;
   const status = useDiagramAutosave(slug, model);
@@ -127,7 +137,7 @@ export function Editor({ slug, name, initial }: { slug: string; name: string; in
   const selectedIndex = editingIndex >= 0 ? editingIndex : afterIndex;
 
   // ── 枠（alt / opt / loop）を畳む。画面の見え方だけで、図のデータは変えない ──
-  const [collapsed, setCollapsed] = useCollapsedFrames(slug);
+  const [collapsed, setCollapsed] = useCollapsedFrames(slug, initialCollapsed);
   const frames = frameIds(model);
   // 選んでいる・点検で示している・中に足そうとしているステップの枠は、畳んでいても開いて見せる
   const shownGroups = new Set(
