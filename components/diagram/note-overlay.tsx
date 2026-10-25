@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
 import type { NoteMark, NoteMarks } from "@/lib/model/notes";
 
 /**
  * 図に重ねて出す付箋。印の位置（MermaidDiagram が描いた SVG の印を測ったもの）に付箋のアイコンを置き、
  * 押すと、その手順・枠・登場人物に貼られた付箋の中身を開いて見せる。
+ * どれを開いているかは呼び出し側が持つ（ツールバーの「付箋をすべて開く／閉じる」から変えるため）。
  *
  * 図の上に重ねるだけで、書き出す図には入らない。中身の書き換えは編集パネルで行う（「編集する」で開く）。
  */
@@ -15,6 +15,16 @@ export type NoteAnchor = { key: string; x: number; y: number };
 
 /** 付箋の印を、どこの印かの key にする（SVG の印にも同じ key を付けて、位置を測る） */
 export const noteKey = (kind: "step" | "frame" | "fold" | "actor", id: string | number) => `${kind}:${id}`;
+
+/** 図に出る付箋の印、すべての key（「付箋をすべて開く」用） */
+export function noteKeys(notes: NoteMarks): string[] {
+  return [
+    ...[...notes.steps.keys()].map((n) => noteKey("step", n)),
+    ...[...notes.frames.keys()].map((i) => noteKey("frame", i)),
+    ...[...notes.folds.keys()].map((k) => noteKey("fold", k)),
+    ...[...notes.actors.keys()].map((id) => noteKey("actor", id)),
+  ];
+}
 
 const WHAT = { step: "手順", frame: "枠", fold: "畳んだ枠", actor: "登場人物" } as const;
 
@@ -42,23 +52,26 @@ export function NoteOverlay({
   anchors,
   notes,
   width,
+  open,
+  onOpenChange,
   onEdit,
 }: {
   anchors: NoteAnchor[];
   notes: NoteMarks;
   /** 図の外枠の幅（px）。開く向きを決める */
   width: number;
+  /** 中身を開いている付箋（noteKey） */
+  open: ReadonlySet<string>;
+  onOpenChange: (next: ReadonlySet<string>) => void;
   /** 「編集する」を押したとき（手順・枠のみ。登場人物の付箋は「登場人物を編集」から直す） */
   onEdit?: (key: string) => void;
 }) {
-  const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
-  const toggle = (key: string) =>
-    setOpen((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+  const toggle = (key: string) => {
+    const next = new Set(open);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    onOpenChange(next);
+  };
 
   return (
     <div className="pointer-events-none absolute inset-0">

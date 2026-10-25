@@ -624,6 +624,8 @@ export function MermaidDiagram({
   highlightStep = 0,
   selectedStep = 0,
   notes,
+  openNotes,
+  onOpenNotesChange,
   play,
 }: {
   code: string;
@@ -665,6 +667,9 @@ export function MermaidDiagram({
   selectedStep?: number;
   /** 付箋のある手順・枠・登場人物（lib/model/notes.ts の noteMarks）。それぞれの横に付箋のアイコンを重ねる */
   notes?: NoteMarks;
+  /** 中身を開いている付箋（note-overlay.tsx の noteKey）。onOpenNotesChange と一緒に渡すと、付箋のアイコンを重ねる */
+  openNotes?: ReadonlySet<string>;
+  onOpenNotesChange?: (next: ReadonlySet<string>) => void;
   /** フローのプレビューで、今の場面に関わる要素を強調する（ほかは薄くする） */
   play?: PlayMark;
 }) {
@@ -884,11 +889,13 @@ export function MermaidDiagram({
               // securityLevel: "strict" の Mermaid が生成した SVG のみを入れる
               dangerouslySetInnerHTML={{ __html: rendered.svg }}
             />
-            {notes && !play && (
+            {notes && openNotes && onOpenNotesChange && !play && (
               <NoteOverlay
                 anchors={noteLayout.anchors}
                 notes={notes}
                 width={noteLayout.width}
+                open={openNotes}
+                onOpenChange={onOpenNotesChange}
                 onEdit={(key) => {
                   const [kind, id] = key.split(":");
                   if (kind === "step") onPickStep?.(Number(id));
