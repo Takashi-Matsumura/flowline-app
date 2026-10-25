@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { PlayMark } from "@/lib/preview/scenes";
 import type { NoteMarks, NoteState } from "@/lib/model/notes";
+import { NoteOverlay, noteKey, type NoteAnchor } from "./note-overlay";
 import { COLLAPSED_MARK, FOCUS_COMMENT, PLACEHOLDER_TEXT, type ArmTarget } from "@/lib/render/mermaid";
 
 type MermaidApi = typeof import("mermaid").default;
@@ -117,16 +118,18 @@ function detachStepDots(root: HTMLElement) {
 
 /**
  * 付箋の印（まだ決まっていなければ黄色の「?」、すべて決まれば緑の「✓」）を付ける。
- * 手順は番号の黒丸（.step-dot）の右上（押すとそのステップを選べる）、枠は見出しの札の右、登場人物は上の頭の右上。
- * 描いた SVG に足すだけで、書き出す図には入らない
+ * 手順は番号の黒丸（.step-dot）の横、枠は見出しの札の右、登場人物は上の頭の右上。
+ * 描いた SVG に足すだけで、書き出す図には入らない。
+ * 印そのものは見せず（visibility: hidden）、位置を測って、その上に付箋のアイコン（NoteOverlay）を重ねる
  */
 const NOTE_CLASS = "note-badge";
-/** 枠の付箋の印に付ける、図の上から何番目の枠か（drawnFrames の順）／何番目の「▸ …」の注記か（collapsedFrames の順） */
-const FRAME_NOTE_ATTR = "data-frame-note";
-const FOLD_NOTE_ATTR = "data-fold-note";
-function noteBadge(x: number, y: number, state: NoteState, what: string): SVGGElement {
+/** 印がどこの付箋か（noteKey）。NoteOverlay のアイコンを置く位置を測るのに使う */
+const NOTE_KEY_ATTR = "data-note-key";
+function noteBadge(x: number, y: number, state: NoteState, key: string): SVGGElement {
   const g = document.createElementNS(SVG_NS, "g");
   g.setAttribute("class", NOTE_CLASS);
+  g.setAttribute(NOTE_KEY_ATTR, key);
+  g.setAttribute("visibility", "hidden");
   const rect = document.createElementNS(SVG_NS, "rect");
   for (const [k, v] of Object.entries({ x, y, width: 13, height: 13, rx: 2 })) rect.setAttribute(k, String(v));
   rect.setAttribute("fill", state === "open" ? "#fde047" : "#bbf7d0");
@@ -139,9 +142,7 @@ function noteBadge(x: number, y: number, state: NoteState, what: string): SVGGEl
   text.setAttribute("font-weight", "700");
   text.setAttribute("fill", state === "open" ? "#854d0e" : "#166534");
   text.textContent = state === "open" ? "?" : "✓";
-  const title = document.createElementNS(SVG_NS, "title");
-  title.textContent = `${what}の付箋: ${state === "open" ? "まだ決まっていないことがあります" : "決まりごとがあります"}`;
-  g.append(rect, text, title);
+  g.append(rect, text);
   return g;
 }
 
@@ -159,42 +160,39 @@ function markNotes(root: HTMLElement, notes: NoteMarks | undefined) {
   for (const el of root.querySelectorAll(`.${NOTE_CLASS}`)) el.remove();
   if (!notes) return;
   for (const dot of root.querySelectorAll(".step-dot")) {
-    const state = notes.steps.get(Number(dot.querySelector(".sequenceNumber")?.textContent?.trim()));
+    const n = Number(dot.querySelector(".sequenceNumber")?.textContent?.trim());
+    const state = notes.steps.get(n)?.state;
     const circle = dot.querySelector("circle");
     if (!state || !circle) continue;
     // 黒丸の横の、矢印が伸びない側に（上は手順名の文字にかかる）
     const cx = Number(circle.getAttribute("cx"));
     const cy = Number(circle.getAttribute("cy"));
     const x = arrowGoesLeft(dot) ? cx + STEP_DOT_R + 3 : cx - STEP_DOT_R - 16;
-    dot.append(noteBadge(x, cy - 6.5, state, "手順"));
+    dot.append(noteBadge(x, cy - 6.5, state, noteKey("step", n)));
   }
   // 枠: 見出しの札（.labelBox）の順 = drawnFrames の順
   [...root.querySelectorAll(".labelBox")].forEach((box, i) => {
-    const state = notes.frames.get(i);
+    const state = notes.frames.get(i)?.state;
     if (!state || !(box instanceof SVGGraphicsElement)) return;
     const b = box.getBBox();
-    const badge = noteBadge(b.x + b.width + 3, b.y + 2, state, "枠");
-    // 押すと枠の付箋のパネルを開く（MermaidDiagram の onFrameNotes）
-    badge.setAttribute(FRAME_NOTE_ATTR, String(i));
-    box.parentElement?.append(badge);
+    box.parentElement?.append(noteBadge(b.x + b.width + 3, b.y + 2, state, noteKey("frame", i)));
   });
   // 畳んだ枠の注記（「▸ …」）。markFrames が上から何番目かの印を付けている（= collapsedFrames の順）
   for (const folded of root.querySelectorAll(`[${COLLAPSED_ATTR}]`)) {
-    const state = notes.folds.get(Number(folded.getAttribute(COLLAPSED_ATTR)));
+    const k = Number(folded.getAttribute(COLLAPSED_ATTR));
+    const state = notes.folds.get(k)?.state;
     const rect = folded.querySelector("rect");
     if (!state || !(rect instanceof SVGGraphicsElement)) continue;
     const b = rect.getBBox();
-    const badge = noteBadge(b.x + b.width - 8, b.y - 5, state, "畳んだ枠");
-    badge.setAttribute(FOLD_NOTE_ATTR, folded.getAttribute(COLLAPSED_ATTR) ?? "");
-    folded.append(badge);
+    folded.append(noteBadge(b.x + b.width - 8, b.y - 5, state, noteKey("fold", k)));
   }
   // 登場人物: 上の頭（Mermaid は要素に name 属性で id を付ける）。箱は右上の角、人型は頭の円の右上
   // （人型の要素は名前の文字や見えない枠まで含んで横に広いので、要素の範囲ではなく円で決める。書き出しの svg-notes.ts と同じ）
-  for (const [id, state] of notes.actors) {
+  for (const [id, { state }] of notes.actors) {
     const box = root.querySelector(`rect.actor-top[name="${id}"]`);
     if (box instanceof SVGGraphicsElement) {
       const b = box.getBBox();
-      box.parentElement?.append(noteBadge(b.x + b.width - 10, b.y - 7, state, "登場人物"));
+      box.parentElement?.append(noteBadge(b.x + b.width - 10, b.y - 7, state, noteKey("actor", id)));
       continue;
     }
     const circle = root.querySelector(`g.actor-man.actor-top[name="${id}"] circle`);
@@ -202,8 +200,21 @@ function markNotes(root: HTMLElement, notes: NoteMarks | undefined) {
     const r = Number(circle.getAttribute("r"));
     const cx = Number(circle.getAttribute("cx"));
     const cy = Number(circle.getAttribute("cy"));
-    circle.parentElement?.append(noteBadge(cx + r, cy - r - 4, state, "登場人物"));
+    circle.parentElement?.append(noteBadge(cx + r, cy - r - 4, state, noteKey("actor", id)));
   }
+}
+
+/** 付箋の印の中心を、図の外枠（base）の左上からの px で測る（NoteOverlay のアイコンを置く位置） */
+function measureNotes(root: HTMLElement, base: HTMLElement): NoteAnchor[] {
+  const origin = base.getBoundingClientRect();
+  return [...root.querySelectorAll(`[${NOTE_KEY_ATTR}]`)].map((el) => {
+    const r = el.getBoundingClientRect();
+    return {
+      key: el.getAttribute(NOTE_KEY_ATTR) ?? "",
+      x: r.left + r.width / 2 - origin.left,
+      y: r.top + r.height / 2 - origin.top,
+    };
+  });
 }
 
 /**
@@ -644,7 +655,7 @@ export function MermaidDiagram({
   /** 畳んだ枠の注記（「▸ …」）を押したら、上から何番目（0 始まり）の注記かを渡す（開く） */
   onExpandFrame?: (k: number) => void;
   /**
-   * 枠の付箋を開く。枠の見出しの札・畳んだ枠の注記を右クリックしたとき、枠の付箋の印を押したとき。
+   * 枠の付箋を開く。枠の見出しの札・畳んだ枠の注記を右クリックしたとき、枠の付箋の「編集する」を押したとき。
    * drawn = 図の上から何番目の枠か（drawnFrames の順）、folded = 何番目の「▸ …」の注記か（collapsedFrames の順）
    */
   onFrameNotes?: (at: { drawn: number } | { folded: number }) => void;
@@ -652,7 +663,7 @@ export function MermaidDiagram({
   highlightStep?: number;
   /** 編集パネルで選んでいるステップの番号（1 始まり。0 なら無し） */
   selectedStep?: number;
-  /** 付箋のある手順・枠・登場人物（lib/model/notes.ts の noteMarks）。それぞれの横に印を付ける */
+  /** 付箋のある手順・枠・登場人物（lib/model/notes.ts の noteMarks）。それぞれの横に付箋のアイコンを重ねる */
   notes?: NoteMarks;
   /** フローのプレビューで、今の場面に関わる要素を強調する（ほかは薄くする） */
   play?: PlayMark;
@@ -668,6 +679,8 @@ export function MermaidDiagram({
   /** ドラッグを終えた直後の click は、ステップを選ぶ操作として扱わない */
   const suppressClickRef = useRef(false);
   const [drop, setDrop] = useState<Drop | null>(null);
+  /** 付箋のアイコンを置く位置と、図の外枠の幅（開く向きを決める） */
+  const [noteLayout, setNoteLayout] = useState<{ anchors: NoteAnchor[]; width: number }>({ anchors: [], width: 0 });
   /** ポインタの位置の落とし先。場合の目印の上なら場合の中、そうでなければステップの間 */
   const dropTarget = (host: HTMLElement, x: number, y: number): DropAt | null => {
     const arm = onDropToArm ? armTargetAt(host, x, y) : null;
@@ -729,7 +742,7 @@ export function MermaidDiagram({
   // 付箋の印は、中身（番号と状態）が変わったときだけ付け直す（Map は毎回作り直される）
   const notesKey = notes
     ? [notes.steps, notes.frames, notes.actors, notes.folds]
-        .map((m) => [...m].map(([k, st]) => `${k}${st[0]}`).join(","))
+        .map((m) => [...m].map(([k, mark]) => `${k}${mark.state[0]}`).join(","))
         .join("|")
     : "";
   // 描き直すたびに SVG が入れ替わるので、そのつど印を付け直す
@@ -748,6 +761,16 @@ export function MermaidDiagram({
     markStep(svgHostRef.current, SELECTED_ATTR, selectedStep);
     markNotes(svgHostRef.current, notes);
     if (play) markPlay(svgHostRef.current, play);
+    // 付箋のアイコンの位置を測る。図の大きさ（拡大・パネルの開閉・窓の幅）が変わるたびに測り直す
+    // （ResizeObserver は observe した直後にも 1 回呼ばれる）
+    const host = svgHostRef.current;
+    const base = host.parentElement;
+    if (!base) return;
+    const observer = new ResizeObserver(() =>
+      setNoteLayout({ anchors: measureNotes(host, base), width: base.clientWidth }),
+    );
+    observer.observe(base);
+    return () => observer.disconnect();
     // onCollapseFrame は押せるかどうか（title を付けるか）だけを見る。毎回変わる関数でも描き直さない
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rendered, highlightStep, selectedStep, play, notesKey]);
@@ -782,15 +805,6 @@ export function MermaidDiagram({
               onClick={(e) => {
                 if (suppressClickRef.current) {
                   suppressClickRef.current = false;
-                  return;
-                }
-                // 枠の付箋の印は、枠を畳む・開くより先に（印は札・注記の中にある）
-                const frameNote =
-                  e.target instanceof Element ? e.target.closest(`[${FRAME_NOTE_ATTR}], [${FOLD_NOTE_ATTR}]`) : null;
-                if (frameNote && onFrameNotes) {
-                  const drawn = frameNote.getAttribute(FRAME_NOTE_ATTR);
-                  const folded = Number(frameNote.getAttribute(FOLD_NOTE_ATTR));
-                  onFrameNotes(drawn !== null ? { drawn: Number(drawn) } : { folded });
                   return;
                 }
                 const ph = e.target instanceof Element ? e.target.closest(`[${PLACEHOLDER_ATTR}]`) : null;
@@ -870,6 +884,19 @@ export function MermaidDiagram({
               // securityLevel: "strict" の Mermaid が生成した SVG のみを入れる
               dangerouslySetInnerHTML={{ __html: rendered.svg }}
             />
+            {notes && !play && (
+              <NoteOverlay
+                anchors={noteLayout.anchors}
+                notes={notes}
+                width={noteLayout.width}
+                onEdit={(key) => {
+                  const [kind, id] = key.split(":");
+                  if (kind === "step") onPickStep?.(Number(id));
+                  else if (kind === "frame") onFrameNotes?.({ drawn: Number(id) });
+                  else if (kind === "fold") onFrameNotes?.({ folded: Number(id) });
+                }}
+              />
+            )}
             {drop && "arm" in drop && (
               <div
                 aria-hidden
