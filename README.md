@@ -54,6 +54,10 @@ http://localhost:3000 を開きます。
 | `VOICEVOX_SPEAKER` | `8` | 読み上げの話者（スタイル ID）。8 = 春日部つむぎ |
 | `DATA_DIR` | `./data` | 図の保存先（SQLite の `flowline.db`） |
 
+### 使い方の動画
+
+一覧画面のサムネイルから再生する動画は、`public/videos/` に置きます（`01-overview.mp4` / `.jpg`、`02-drawing.mp4` / `.jpg`）。サイズが大きいので git には入れていません。Docker イメージにはビルド時に取り込まれるので、差し替えたらイメージを作り直してください。一覧は `components/ui/tutorial-videos.tsx` にあります。
+
 ## ディレクトリ構成
 
 ```

@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
+import { TutorialVideos } from "@/components/ui/tutorial-videos";
 import type { DiagramMeta } from "@/lib/store/diagram-types";
 import { MAX_IMPORT_BYTES } from "@/lib/store/import";
 
@@ -174,6 +175,8 @@ export function DiagramList({ initial }: { initial: DiagramMeta[] }) {
           </p>
         )}
       </section>
+
+      <TutorialVideos />
 
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">保存済みの図（{diagrams.length}）</h2>
