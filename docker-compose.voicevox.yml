@@ -1,13 +1,18 @@
-# 流れのプレビューの読み上げに使う VOICEVOX エンジン。Docker Desktop で動かす（Colima ではない）。
+# 流れのプレビューの読み上げに使う VOICEVOX エンジン。
 #
 # 使い方:
-#   docker context use desktop-linux
-#   docker compose -f docker-compose.voicevox.yml up -d
+#   docker context use colima
+#   docker-compose -f docker-compose.voicevox.yml up -d
 #   curl -s http://127.0.0.1:50021/version
 #
-# 既定はホストの 127.0.0.1 だけに公開する（npm run dev のアプリから呼ぶ分にはこれで足りる）。
+# 既定はホストの 127.0.0.1 だけに公開する。npm run dev のアプリからも、
+# docker-compose.yml のアプリ（host.docker.internal 経由）からも、これで届く。
 #
 # Apple Silicon でも cpu イメージに arm64 版がある。GPU（Metal）は使えないが、字幕 1 文なら CPU で十分速い。
+
+# アプリ（docker-compose.yml）とは別のプロジェクトにする。名前を付けないと、どちらも
+# フォルダ名の flowline-app になり、片方で --remove-orphans を付けるともう片方が消える。
+name: flowline-voicevox
 
 services:
   voicevox:

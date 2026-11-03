@@ -12,6 +12,10 @@
 #   docker-compose up -d --build
 #   docker-compose logs -f app
 
+# プロジェクト名を固定する。既定はフォルダ名なので、別名のフォルダに置くと
+# volume（flowline-app_data）が別物になり、図が見えなくなる。
+name: flowline-app
+
 services:
   app:
     build:
