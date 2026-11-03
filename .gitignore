@@ -43,3 +43,7 @@ next-env.d.ts
 
 # diagrams (runtime data)
 /data/
+
+# tutorial videos (too large for git; baked into the Docker image)
+/public/videos/*
+!/public/videos/.gitkeep
