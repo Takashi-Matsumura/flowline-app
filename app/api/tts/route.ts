@@ -7,6 +7,17 @@ const VOICEVOX_TIMEOUT_MS = 20_000;
 const MIN_SPEED = 0.5;
 const MAX_SPEED = 2;
 
+/**
+ * VOICEVOX が読み違える語と、その読み（カタカナ）。
+ * 置き換えるのは VOICEVOX に渡す文だけなので、画面の字幕はそのまま。
+ * 例: 「Flowline」はそのままだと「フローリン」と読まれる。
+ */
+const READINGS: [RegExp, string][] = [[/\bFlowline\b/gi, "フローライン"]];
+
+function toSpeech(text: string): string {
+  return READINGS.reduce((t, [word, kana]) => t.replace(word, kana), text);
+}
+
 function baseUrl(): string {
   return process.env.VOICEVOX_BASE_URL ?? "http://127.0.0.1:50021";
 }
@@ -106,7 +117,7 @@ export async function POST(request: Request) {
   try {
     // VOICEVOX は 2 段階。読み・アクセントを作ってから（audio_query）、それを音にする（synthesis）
     const query = (await (
-      await call(`/audio_query?${new URLSearchParams({ text, speaker })}`, { method: "POST" })
+      await call(`/audio_query?${new URLSearchParams({ text: toSpeech(text), speaker })}`, { method: "POST" })
     ).json()) as Record<string, unknown>;
     query.speedScale = speed;
     const wav = await call(`/synthesis?${new URLSearchParams({ speaker })}`, {
