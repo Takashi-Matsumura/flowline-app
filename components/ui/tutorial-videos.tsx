@@ -15,16 +15,22 @@ const VIDEOS = [
 
 type Video = (typeof VIDEOS)[number];
 
+/** 再生速度の選択肢。字幕を読む時間が要るので 1.5 倍までにする */
+const RATES = [1, 1.25, 1.5] as const;
+
 /** 残り秒数を「12:07」の形にする */
 const clock = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
 
 /** サムネイルの並びと、押すと開く再生ダイアログ。 */
 export function TutorialVideos() {
   const ref = useRef<HTMLDialogElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState<Video | null>(null);
   const [failed, setFailed] = useState(false);
-  /** 動画の終わりまでの秒数。長さが分かるまでは null */
+  /** 動画の終わりまでの秒数（今の速度で再生したときの実時間）。長さが分かるまでは null */
   const [remaining, setRemaining] = useState<number | null>(null);
+  /** 選んだ速度は、ダイアログを閉じても次の動画に引き継ぐ */
+  const [rate, setRate] = useState<number>(1);
 
   function open(video: Video) {
     setPlaying(video);
@@ -35,7 +41,13 @@ export function TutorialVideos() {
 
   function updateRemaining(v: HTMLVideoElement) {
     if (!Number.isFinite(v.duration)) return;
-    setRemaining(Math.max(0, Math.ceil(v.duration - v.currentTime)));
+    setRemaining(Math.max(0, Math.ceil((v.duration - v.currentTime) / v.playbackRate)));
+  }
+
+  function changeRate(next: number) {
+    setRate(next);
+    // ratechange で残り時間も更新される
+    if (videoRef.current) videoRef.current.playbackRate = next;
   }
 
   return (
@@ -76,8 +88,25 @@ export function TutorialVideos() {
           <div className="flex items-center justify-between gap-2">
             <h2 className="truncate font-medium">{playing?.title}</h2>
             <span className="ml-auto flex shrink-0 items-center gap-3">
+              {playing && !failed && (
+                <span role="group" aria-label="再生速度" className="flex gap-1 rounded-md bg-zinc-100 p-0.5 text-xs dark:bg-white/10">
+                  {RATES.map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      aria-pressed={rate === r}
+                      className={`rounded px-2 py-1 tabular-nums ${
+                        rate === r ? "bg-white shadow-sm dark:bg-zinc-700" : "text-zinc-500 hover:text-inherit"
+                      }`}
+                      onClick={() => changeRate(r)}
+                    >
+                      x{r}
+                    </button>
+                  ))}
+                </span>
+              )}
               {remaining !== null && !failed && (
-                <span className="text-sm tabular-nums text-zinc-500" title="動画の終わりまでの時間">
+                <span className="text-sm tabular-nums text-zinc-500" title="今の速度で再生したときの、終わりまでの時間">
                   残り {clock(remaining)}
                 </span>
               )}
@@ -98,6 +127,7 @@ export function TutorialVideos() {
             playing && (
               <video
                 key={playing.id}
+                ref={videoRef}
                 src={`/videos/${playing.id}.mp4`}
                 poster={`/videos/${playing.id}.jpg`}
                 controls
@@ -106,7 +136,16 @@ export function TutorialVideos() {
                 preload="metadata"
                 className="max-h-[80vh] w-full rounded bg-black"
                 onError={() => setFailed(true)}
-                onLoadedMetadata={(e) => updateRemaining(e.currentTarget)}
+                onLoadedMetadata={(e) => {
+                  // 新しい video は速度 1 で始まるので、選んである速度に合わせる
+                  e.currentTarget.playbackRate = rate;
+                  updateRemaining(e.currentTarget);
+                }}
+                onRateChange={(e) => {
+                  // ブラウザの操作バー（⋮）から変えた場合も、ボタンの表示を合わせる
+                  setRate(e.currentTarget.playbackRate);
+                  updateRemaining(e.currentTarget);
+                }}
                 onTimeUpdate={(e) => updateRemaining(e.currentTarget)}
               />
             )
