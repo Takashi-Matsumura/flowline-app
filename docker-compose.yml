@@ -1,0 +1,61 @@
+# Flowline のデプロイ（Colima 想定）。
+#
+# 前提: llama-server と VOICEVOX はコンテナの外で動かし、host.docker.internal 経由で呼ぶ。
+#         llama-server :8080
+#         VOICEVOX     :50021（任意。無ければ読み上げなしで再生する）
+#
+# ★ 認証が無いアプリなので、既定はホストの 127.0.0.1 だけに公開する。
+#   LAN に出すと誰でも図の閲覧・編集・削除ができる。出すときだけ APP_BIND=0.0.0.0 にする。
+#
+# 使い方:
+#   docker context use colima
+#   docker-compose up -d --build
+#   docker-compose logs -f app
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # apk と npm ci のために社内プロキシを渡す。
+      # Docker が ~/.docker/config.json から自動で入れるのは HTTPS_PROXY だけなので明示する。
+      args:
+        HTTP_PROXY: "${BUILD_PROXY:-http://host.docker.internal:3128}"
+        HTTPS_PROXY: "${BUILD_PROXY:-http://host.docker.internal:3128}"
+        # プロキシ自身を除外に入れると到達できなくなるので、ここには書かない
+        NO_PROXY: "localhost,127.0.0.1"
+      extra_hosts:
+        - "host.docker.internal:host-gateway"
+    image: flowline-app:latest
+    container_name: flowline-app
+    restart: unless-stopped
+    ports:
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-8062}:3000"
+    environment:
+      LLAMA_BASE_URL: "${LLAMA_BASE_URL:-http://host.docker.internal:8080}"
+      LLAMA_MODEL: "${LLAMA_MODEL:-gemma-4-12b-it}"
+      LLAMA_IDLE_TIMEOUT_MS: "${LLAMA_IDLE_TIMEOUT_MS:-120000}"
+      VOICEVOX_BASE_URL: "${VOICEVOX_BASE_URL:-http://host.docker.internal:50021}"
+      VOICEVOX_SPEAKER: "${VOICEVOX_SPEAKER:-8}"
+      # 下の named volume と一致させる
+      DATA_DIR: /data
+      # 社内プロキシがコンテナに注入される（~/.docker/config.json）。ホスト側の
+      # バックエンドへの通信をプロキシに送らせないため、明示的に除外する。
+      NO_PROXY: "localhost,127.0.0.1,host.docker.internal"
+      no_proxy: "localhost,127.0.0.1,host.docker.internal"
+    # Linux/Colima のコンテナから「ホスト」を host.docker.internal で解決させる。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # 図（flowline.db）を named volume に永続化（コンテナ再作成でも残る）
+      - data:/data
+    healthcheck:
+      # BusyBox wget は no_proxy を解釈しないため、注入されたプロキシ環境変数を明示的に無効化する。
+      test: ["CMD-SHELL", "http_proxy= https_proxy= HTTP_PROXY= HTTPS_PROXY= wget -qO- http://127.0.0.1:3000/ >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  data:
