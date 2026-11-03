@@ -5,6 +5,7 @@ import { MermaidDiagram } from "@/components/diagram/mermaid-diagram";
 import type { FlowModel } from "@/lib/model/types";
 import { buildScenes, narrate, speechOf, type Narration, type Scene } from "@/lib/preview/scenes";
 import { toMermaid } from "@/lib/render/mermaid";
+import { fetchVoices, useVoiceChoice, VoiceSelect, type Tts } from "@/components/ui/voice";
 
 /** 1 場面を見せる時間（ミリ秒）。字幕が長いほど長く、ステップは矢印の丸が走る分を足す */
 function durationOf(scene: Scene): number {
@@ -27,7 +28,6 @@ const SPEEDS = [
 ] as const;
 
 type Ai = { status: "loading" } | { status: "ready"; narration: Narration } | { status: "error"; message: string };
-type Tts = { status: "loading" } | { status: "ready"; credit: string } | { status: "error"; message: string };
 
 async function errorOf(res: Response): Promise<string> {
   const json = (await res.json().catch(() => ({}))) as { error?: string };
@@ -60,6 +60,8 @@ export function FlowPlayer({ name, model, onClose }: { name: string; model: Flow
   const [voice, setVoice] = useState(true);
   const [tts, setTts] = useState<Tts>({ status: "loading" });
   const voiceSpeed = SPEEDS.find((s) => s.value === speed)?.voice ?? 1;
+  const { voice: speaker, choose } = useVoiceChoice(tts);
+  const speakerId = speaker?.id;
   // 字幕と話す速さごとの音声（object URL）。前へ戻ったときや先読みで、同じ文を作り直さない
   const audioCache = useRef(new Map<string, Promise<string>>());
   const last = scenes.length - 1;
@@ -95,15 +97,8 @@ export function FlowPlayer({ name, model, onClose }: { name: string; model: Flow
   useEffect(() => {
     if (!voice || tts.status !== "loading") return;
     const ctrl = new AbortController();
-    fetch("/api/tts", { signal: ctrl.signal })
-      .then(async (res) => {
-        const json = (await res.json().catch(() => ({}))) as { credit?: string; error?: string };
-        setTts(
-          res.ok && json.credit
-            ? { status: "ready", credit: json.credit }
-            : { status: "error", message: json.error ?? `HTTP ${res.status}` },
-        );
-      })
+    fetchVoices(ctrl.signal)
+      .then(setTts)
       .catch((e) => {
         if (!ctrl.signal.aborted) setTts({ status: "error", message: e instanceof Error ? e.message : "通信に失敗しました" });
       });
@@ -120,13 +115,13 @@ export function FlowPlayer({ name, model, onClose }: { name: string; model: Flow
 
   const speech = useCallback(
     (text: string): Promise<string> => {
-      const key = `${voiceSpeed}:${text}`;
+      const key = `${speakerId}:${voiceSpeed}:${text}`;
       let url = audioCache.current.get(key);
       if (!url) {
         url = fetch("/api/tts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text, speed: voiceSpeed }),
+          body: JSON.stringify({ text, speed: voiceSpeed, speaker: speakerId }),
         }).then(async (res) => {
           if (!res.ok) throw new Error(await errorOf(res));
           return URL.createObjectURL(await res.blob());
@@ -137,7 +132,7 @@ export function FlowPlayer({ name, model, onClose }: { name: string; model: Flow
       }
       return url;
     },
-    [voiceSpeed],
+    [voiceSpeed, speakerId],
   );
   const speaking = voice && tts.status === "ready";
 
@@ -360,9 +355,10 @@ export function FlowPlayer({ name, model, onClose }: { name: string; model: Flow
                     ? "（準備中…）"
                     : tts.status === "error"
                       ? "（使えません）"
-                      : `（${tts.credit}）`}
+                      : `（${speaker?.credit ?? ""}）`}
               </span>
             </label>
+            {voice && <VoiceSelect tts={tts} voice={speaker} choose={choose} />}
           </div>
         </section>
       </div>

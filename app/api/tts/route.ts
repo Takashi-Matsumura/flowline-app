@@ -11,10 +11,24 @@ function baseUrl(): string {
   return process.env.VOICEVOX_BASE_URL ?? "http://127.0.0.1:50021";
 }
 
-/** 話者（スタイル）ID はサーバ側の設定だけで決める。ブラウザからは選ばせない */
+const isId = (n: number) => Number.isInteger(n) && n >= 0;
+
+/** 既定の話者（スタイル ID） */
 function speakerId(): number {
   const n = Number(process.env.VOICEVOX_SPEAKER ?? 8);
-  return Number.isInteger(n) && n >= 0 ? n : 8;
+  return isId(n) ? n : 8;
+}
+
+/**
+ * ブラウザから選べる話者（スタイル ID）。選べるのはサーバ側で決めたこの中だけ。
+ * 既定は 春日部つむぎ（8）と 麒ヶ島宗麟（53）。既定の話者は必ず先頭に入る。
+ */
+function allowedSpeakers(): number[] {
+  const listed = (process.env.VOICEVOX_SPEAKERS ?? "8,53")
+    .split(",")
+    .map((x) => Number(x.trim()))
+    .filter(isId);
+  return [...new Set([speakerId(), ...listed])];
 }
 
 function describeFailure(base: string, e: unknown): string {
@@ -34,26 +48,35 @@ async function call(path: string, init?: RequestInit): Promise<Response> {
   return res;
 }
 
-// 話者名はエンジンを入れ替えない限り変わらないので、一度引いたら覚えておく
-let credit: { speaker: number; text: string } | null = null;
+// 話者名（スタイル ID → キャラクター名）。エンジンを入れ替えない限り変わらないので、一度引いたら覚えておく
+let names: Map<number, string> | null = null;
+
+async function speakerNames(ids: number[]): Promise<Map<number, string>> {
+  if (!names || ids.some((id) => !names!.has(id))) {
+    const res = await call("/speakers");
+    const speakers = (await res.json()) as { name: string; styles: { id: number }[] }[];
+    names = new Map(speakers.flatMap((s) => s.styles.map((st) => [st.id, s.name] as const)));
+  }
+  return names;
+}
 
 /**
- * 読み上げに使う声のクレジット（「VOICEVOX:春日部つむぎ」）。
+ * 選べる声と、そのクレジット（「VOICEVOX:春日部つむぎ」）。
  * VOICEVOX の利用規約で、音声を使う画面に表記が要る。疎通確認も兼ねる。
+ * `credit` は既定の声のもの（古い画面向けに残す）。
  */
 export async function GET() {
   // エンジンの状態はリクエストのたびに確かめる（ビルド時に引いた結果を返さない）
   await connection();
   const speaker = speakerId();
   try {
-    if (credit?.speaker !== speaker) {
-      const res = await call("/speakers");
-      const speakers = (await res.json()) as { name: string; styles: { id: number }[] }[];
-      const found = speakers.find((s) => s.styles.some((st) => st.id === speaker));
-      if (!found) throw new Error(`話者 ${speaker} がエンジンにありません（VOICEVOX_SPEAKER を確認）`);
-      credit = { speaker, text: `VOICEVOX:${found.name}` };
-    }
-    return Response.json({ credit: credit.text });
+    const found = await speakerNames(allowedSpeakers());
+    if (!found.has(speaker)) throw new Error(`話者 ${speaker} がエンジンにありません（VOICEVOX_SPEAKER を確認）`);
+    // エンジンに無い声は選ばせない
+    const voices = allowedSpeakers()
+      .filter((id) => found.has(id))
+      .map((id) => ({ id, name: found.get(id)!, credit: `VOICEVOX:${found.get(id)}` }));
+    return Response.json({ credit: `VOICEVOX:${found.get(speaker)}`, default: speaker, voices });
   } catch (e) {
     return Response.json({ error: describeFailure(baseUrl(), e) }, { status: 502 });
   }
@@ -61,7 +84,7 @@ export async function GET() {
 
 /** 字幕 1 つを読み上げた WAV を返す */
 export async function POST(request: Request) {
-  let body: { text?: unknown; speed?: unknown };
+  let body: { text?: unknown; speed?: unknown; speaker?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -75,7 +98,11 @@ export async function POST(request: Request) {
       ? Math.min(MAX_SPEED, Math.max(MIN_SPEED, body.speed))
       : 1;
 
-  const speaker = String(speakerId());
+  // 話者は選べる声の中からだけ。指定が無ければ既定の声
+  if (body.speaker !== undefined && !(typeof body.speaker === "number" && allowedSpeakers().includes(body.speaker))) {
+    return Response.json({ error: "その声は選べません" }, { status: 400 });
+  }
+  const speaker = String(typeof body.speaker === "number" ? body.speaker : speakerId());
   try {
     // VOICEVOX は 2 段階。読み・アクセントを作ってから（audio_query）、それを音にする（synthesis）
     const query = (await (

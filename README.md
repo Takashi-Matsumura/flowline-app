@@ -51,7 +51,8 @@ http://localhost:3000 を開きます。
 | `LLAMA_MODEL` | `gemma` | llama-server に渡すモデル名 |
 | `LLAMA_IDLE_TIMEOUT_MS` | `120000` | トークンが届かない時間がこれを超えたら打ち切る |
 | `VOICEVOX_BASE_URL` | `http://127.0.0.1:50021` | VOICEVOX エンジン。起動していなければ読み上げなしで再生する |
-| `VOICEVOX_SPEAKER` | `8` | 読み上げの話者（スタイル ID）。8 = 春日部つむぎ |
+| `VOICEVOX_SPEAKER` | `8` | 読み上げの既定の話者（スタイル ID）。8 = 春日部つむぎ |
+| `VOICEVOX_SPEAKERS` | `8,53` | 画面で選べる話者（スタイル ID のカンマ区切り）。53 = 麒ヶ島宗麟 |
 | `DATA_DIR` | `./data` | 図の保存先（SQLite の `flowline.db`） |
 
 ### 使い方の動画

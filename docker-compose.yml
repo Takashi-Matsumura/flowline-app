@@ -41,6 +41,8 @@ services:
       LLAMA_IDLE_TIMEOUT_MS: "${LLAMA_IDLE_TIMEOUT_MS:-120000}"
       VOICEVOX_BASE_URL: "${VOICEVOX_BASE_URL:-http://host.docker.internal:50021}"
       VOICEVOX_SPEAKER: "${VOICEVOX_SPEAKER:-8}"
+      # 画面で選べる声（スタイル ID をカンマ区切り）。8 = 春日部つむぎ、53 = 麒ヶ島宗麟
+      VOICEVOX_SPEAKERS: "${VOICEVOX_SPEAKERS:-8,53}"
       # 下の named volume と一致させる
       DATA_DIR: /data
       # 社内プロキシがコンテナに注入される（~/.docker/config.json）。ホスト側の

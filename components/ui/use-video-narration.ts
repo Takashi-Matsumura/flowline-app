@@ -2,11 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { parseVtt, type Cue } from "@/lib/vtt";
-
-export type Narration =
-  | { status: "loading" }
-  | { status: "ready"; credit: string }
-  | { status: "error"; message: string };
+import { fetchVoices, useVoiceChoice, type Tts, type Voice } from "./voice";
 
 /**
  * 読み上げない字幕。動画は音声なしの前提で作ってあり、
@@ -41,24 +37,19 @@ export function useVideoNarration({
   enabled: boolean;
   /** VOICEVOX の話す速さ（speedScale） */
   voiceSpeed: number;
-}): { narration: Narration; retry: () => void } {
-  const [narration, setNarration] = useState<Narration>({ status: "loading" });
+}): { narration: Tts; retry: () => void; voice: Voice | null; choose: (id: number) => void } {
+  const [narration, setNarration] = useState<Tts>({ status: "loading" });
+  const { voice, choose } = useVoiceChoice(narration);
+  const speakerId = voice?.id;
   const [cues, setCues] = useState<{ src: string; list: Cue[] } | null>(null);
   const audioCache = useRef(new Map<string, Promise<string>>());
 
-  // 声のクレジット。取れたら読み上げが使える
+  // 選べる声とクレジット。取れたら読み上げが使える
   useEffect(() => {
     if (!enabled || narration.status !== "loading") return;
     const ctrl = new AbortController();
-    fetch("/api/tts", { signal: ctrl.signal })
-      .then(async (res) => {
-        const json = (await res.json().catch(() => ({}))) as { credit?: string; error?: string };
-        setNarration(
-          res.ok && json.credit
-            ? { status: "ready", credit: json.credit }
-            : { status: "error", message: json.error ?? `HTTP ${res.status}` },
-        );
-      })
+    fetchVoices(ctrl.signal)
+      .then(setNarration)
       .catch((e) => {
         if (!ctrl.signal.aborted)
           setNarration({ status: "error", message: e instanceof Error ? e.message : "通信に失敗しました" });
@@ -92,13 +83,13 @@ export function useVideoNarration({
 
   const speech = useCallback(
     (text: string): Promise<string> => {
-      const key = `${voiceSpeed}:${text}`;
+      const key = `${speakerId}:${voiceSpeed}:${text}`;
       let url = audioCache.current.get(key);
       if (!url) {
         url = fetch("/api/tts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text, speed: voiceSpeed }),
+          body: JSON.stringify({ text, speed: voiceSpeed, speaker: speakerId }),
         }).then(async (res) => {
           if (!res.ok) throw new Error(await errorOf(res));
           return URL.createObjectURL(await res.blob());
@@ -109,7 +100,7 @@ export function useVideoNarration({
       }
       return url;
     },
-    [voiceSpeed],
+    [voiceSpeed, speakerId],
   );
 
   const list = cues?.src === vttSrc ? cues.list : null;
@@ -259,5 +250,5 @@ export function useVideoNarration({
   }, [active, video, list, speech]);
 
   const retry = useCallback(() => setNarration({ status: "loading" }), []);
-  return { narration, retry };
+  return { narration, retry, voice, choose };
 }

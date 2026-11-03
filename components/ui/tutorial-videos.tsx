@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useCallback, useRef, useState } from "react";
 import { useVideoNarration } from "./use-video-narration";
+import { VoiceSelect } from "./voice";
 
 /**
  * 動画の本体とサムネイルは public/videos に置く。大きいので git には入れず、
@@ -46,7 +47,12 @@ export function TutorialVideos() {
   const [rate, setRate] = useState<number>(1);
   /** 読み上げのオン・オフ。速度と同じく次の動画に引き継ぐ */
   const [voice, setVoice] = useState(true);
-  const { narration, retry } = useVideoNarration({
+  const {
+    narration,
+    retry,
+    voice: speaker,
+    choose,
+  } = useVideoNarration({
     video: videoEl,
     vttSrc: playing ? `/videos/${playing.id}.vtt` : null,
     enabled: voice && playing !== null && !failed,
@@ -110,7 +116,11 @@ export function TutorialVideos() {
             <h2 className="truncate font-medium">{playing?.title}</h2>
             <span className="ml-auto flex shrink-0 items-center gap-3">
               {playing && !failed && (
-                <span role="group" aria-label="再生速度" className="flex gap-1 rounded-md bg-zinc-100 p-0.5 text-xs dark:bg-white/10">
+                <span
+                  role="group"
+                  aria-label="再生速度"
+                  className="flex gap-1 rounded-md bg-zinc-100 p-0.5 text-xs dark:bg-white/10"
+                >
                   {RATES.map((r) => (
                     <button
                       key={r}
@@ -172,33 +182,36 @@ export function TutorialVideos() {
             )
           )}
           {playing && !failed && (
-            <label
-              className="flex items-center gap-1.5 self-start text-sm"
-              title={
-                narration.status === "error"
-                  ? narration.message
-                  : "字幕を声で読み上げます（VOICEVOX）。読み終わらないときは、読み終えるまで動画が止まります"
-              }
-            >
-              <input
-                type="checkbox"
-                checked={voice}
-                onChange={(e) => {
-                  setVoice(e.target.checked);
-                  if (e.target.checked && narration.status === "error") retry();
-                }}
-              />
-              字幕を読み上げる
-              <span className="text-xs text-zinc-500">
-                {!voice
-                  ? ""
-                  : narration.status === "loading"
-                    ? "（準備中…）"
-                    : narration.status === "error"
-                      ? "（使えません）"
-                      : `（${narration.credit}）`}
-              </span>
-            </label>
+            <div className="flex flex-wrap items-center gap-3">
+              <label
+                className="flex items-center gap-1.5 text-sm"
+                title={
+                  narration.status === "error"
+                    ? narration.message
+                    : "字幕を声で読み上げます（VOICEVOX）。読み終わらないときは、読み終えるまで動画が止まります"
+                }
+              >
+                <input
+                  type="checkbox"
+                  checked={voice}
+                  onChange={(e) => {
+                    setVoice(e.target.checked);
+                    if (e.target.checked && narration.status === "error") retry();
+                  }}
+                />
+                字幕を読み上げる
+                <span className="text-xs text-zinc-500">
+                  {!voice
+                    ? ""
+                    : narration.status === "loading"
+                      ? "（準備中…）"
+                      : narration.status === "error"
+                        ? "（使えません）"
+                        : `（${speaker?.credit ?? ""}）`}
+                </span>
+              </label>
+              {voice && <VoiceSelect tts={narration} voice={speaker} choose={choose} />}
+            </div>
           )}
         </div>
       </dialog>
