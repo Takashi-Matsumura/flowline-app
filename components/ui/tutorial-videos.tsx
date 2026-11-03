@@ -15,16 +15,27 @@ const VIDEOS = [
 
 type Video = (typeof VIDEOS)[number];
 
+/** 残り秒数を「12:07」の形にする */
+const clock = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+
 /** サムネイルの並びと、押すと開く再生ダイアログ。 */
 export function TutorialVideos() {
   const ref = useRef<HTMLDialogElement>(null);
   const [playing, setPlaying] = useState<Video | null>(null);
   const [failed, setFailed] = useState(false);
+  /** 動画の終わりまでの秒数。長さが分かるまでは null */
+  const [remaining, setRemaining] = useState<number | null>(null);
 
   function open(video: Video) {
     setPlaying(video);
     setFailed(false);
+    setRemaining(null);
     ref.current?.showModal();
+  }
+
+  function updateRemaining(v: HTMLVideoElement) {
+    if (!Number.isFinite(v.duration)) return;
+    setRemaining(Math.max(0, Math.ceil(v.duration - v.currentTime)));
   }
 
   return (
@@ -64,13 +75,20 @@ export function TutorialVideos() {
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-2">
             <h2 className="truncate font-medium">{playing?.title}</h2>
-            <button
-              type="button"
-              className="shrink-0 rounded-md border border-black/15 px-2.5 py-1 text-sm hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-              onClick={() => ref.current?.close()}
-            >
-              閉じる
-            </button>
+            <span className="ml-auto flex shrink-0 items-center gap-3">
+              {remaining !== null && !failed && (
+                <span className="text-sm tabular-nums text-zinc-500" title="動画の終わりまでの時間">
+                  残り {clock(remaining)}
+                </span>
+              )}
+              <button
+                type="button"
+                className="rounded-md border border-black/15 px-2.5 py-1 text-sm hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+                onClick={() => ref.current?.close()}
+              >
+                閉じる
+              </button>
+            </span>
           </div>
           {failed ? (
             <p role="alert" className="text-sm text-amber-600 dark:text-amber-400">
@@ -88,6 +106,8 @@ export function TutorialVideos() {
                 preload="metadata"
                 className="max-h-[80vh] w-full rounded bg-black"
                 onError={() => setFailed(true)}
+                onLoadedMetadata={(e) => updateRemaining(e.currentTarget)}
+                onTimeUpdate={(e) => updateRemaining(e.currentTarget)}
               />
             )
           )}
