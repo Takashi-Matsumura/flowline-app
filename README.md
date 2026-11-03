@@ -56,7 +56,7 @@ http://localhost:3000 を開きます。
 
 ### 使い方の動画
 
-一覧画面のサムネイルから再生する動画は、`public/videos/` に置きます（`01-overview.mp4` / `.jpg`、`02-drawing.mp4` / `.jpg`）。サイズが大きいので git には入れていません。Docker イメージにはビルド時に取り込まれるので、差し替えたらイメージを作り直してください。一覧は `components/ui/tutorial-videos.tsx` にあります。
+一覧画面のサムネイルから再生する動画は、`public/videos/` に置きます（`01-overview` と `02-drawing` の `.mp4` / `.jpg` / `.vtt`）。動画に音声はなく、アプリの再生ダイアログでは字幕（`.vtt`）を VOICEVOX で読み上げます。サイズが大きいので git には入れていません。Docker イメージにはビルド時に取り込まれるので、差し替えたらイメージを作り直してください。一覧は `components/ui/tutorial-videos.tsx` にあります。
 
 ## ディレクトリ構成
 

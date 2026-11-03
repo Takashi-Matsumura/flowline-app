@@ -1,12 +1,14 @@
 "use client";
 
 import Image from "next/image";
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import { useVideoNarration } from "./use-video-narration";
 
 /**
  * 動画の本体とサムネイルは public/videos に置く。大きいので git には入れず、
  * Docker イメージのビルド時に取り込む。
  * シークは静的配信の Range 応答に任せる（専用の配信 API は要らない）。
+ * 字幕（.vtt）も同じ場所に置き、アプリの再生ダイアログでは VOICEVOX で読み上げる。
  */
 const VIDEOS = [
   { id: "01-overview", title: "アプリの概要", length: "12分" },
@@ -18,19 +20,38 @@ type Video = (typeof VIDEOS)[number];
 /** 再生速度の選択肢。字幕を読む時間が要るので 1.5 倍までにする */
 const RATES = [1, 1.25, 1.5] as const;
 
+/**
+ * 再生速度に合わせた VOICEVOX の話す速さ。動画ほど上げると聞き取りにくいので控えめにし、
+ * 読み終わらない分は動画を止めて待つ。
+ */
+const voiceSpeedOf = (rate: number) => (rate >= 1.5 ? 1.4 : rate >= 1.25 ? 1.25 : 1.1);
+
 /** 残り秒数を「12:07」の形にする */
 const clock = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
 
 /** サムネイルの並びと、押すと開く再生ダイアログ。 */
 export function TutorialVideos() {
   const ref = useRef<HTMLDialogElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
+  const attachVideo = useCallback((el: HTMLVideoElement | null) => {
+    videoRef.current = el;
+    setVideoEl(el);
+  }, []);
   const [playing, setPlaying] = useState<Video | null>(null);
   const [failed, setFailed] = useState(false);
   /** 動画の終わりまでの秒数（今の速度で再生したときの実時間）。長さが分かるまでは null */
   const [remaining, setRemaining] = useState<number | null>(null);
   /** 選んだ速度は、ダイアログを閉じても次の動画に引き継ぐ */
   const [rate, setRate] = useState<number>(1);
+  /** 読み上げのオン・オフ。速度と同じく次の動画に引き継ぐ */
+  const [voice, setVoice] = useState(true);
+  const { narration, retry } = useVideoNarration({
+    video: videoEl,
+    vttSrc: playing ? `/videos/${playing.id}.vtt` : null,
+    enabled: voice && playing !== null && !failed,
+    voiceSpeed: voiceSpeedOf(rate),
+  });
 
   function open(video: Video) {
     setPlaying(video);
@@ -71,7 +92,7 @@ export function TutorialVideos() {
               </span>
               <span className="block p-3">
                 <span className="block truncate font-medium">{v.title}</span>
-                <span className="block text-xs text-zinc-500">約{v.length}・音声なし（字幕つき）</span>
+                <span className="block text-xs text-zinc-500">約{v.length}・字幕つき</span>
               </span>
             </button>
           </li>
@@ -127,7 +148,7 @@ export function TutorialVideos() {
             playing && (
               <video
                 key={playing.id}
-                ref={videoRef}
+                ref={attachVideo}
                 src={`/videos/${playing.id}.mp4`}
                 poster={`/videos/${playing.id}.jpg`}
                 controls
@@ -149,6 +170,35 @@ export function TutorialVideos() {
                 onTimeUpdate={(e) => updateRemaining(e.currentTarget)}
               />
             )
+          )}
+          {playing && !failed && (
+            <label
+              className="flex items-center gap-1.5 self-start text-sm"
+              title={
+                narration.status === "error"
+                  ? narration.message
+                  : "字幕を声で読み上げます（VOICEVOX）。読み終わらないときは、読み終えるまで動画が止まります"
+              }
+            >
+              <input
+                type="checkbox"
+                checked={voice}
+                onChange={(e) => {
+                  setVoice(e.target.checked);
+                  if (e.target.checked && narration.status === "error") retry();
+                }}
+              />
+              字幕を読み上げる
+              <span className="text-xs text-zinc-500">
+                {!voice
+                  ? ""
+                  : narration.status === "loading"
+                    ? "（準備中…）"
+                    : narration.status === "error"
+                      ? "（使えません）"
+                      : `（${narration.credit}）`}
+              </span>
+            </label>
           )}
         </div>
       </dialog>
