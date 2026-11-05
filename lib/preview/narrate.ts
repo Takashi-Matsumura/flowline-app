@@ -1,9 +1,10 @@
 import { extractJson } from "@/lib/json";
 import { chatCompletion } from "@/lib/llm";
+import { armChain, branchIndex } from "@/lib/model/frames";
 import type { FlowModel } from "@/lib/model/types";
 import { loadPrompt } from "@/lib/prompts";
 import { flowItems } from "@/lib/render/mermaid";
-import { armContext, type Narration } from "./scenes";
+import { chainContext, type Narration } from "./scenes";
 
 /**
  * プレビューの字幕を、gemma に自然な文へ言い換えさせる。server 専用。
@@ -38,6 +39,7 @@ export function parseNarration(json: unknown, stepIds: Set<string>): Narration {
 
 export async function generateNarration(model: FlowModel, title: string): Promise<Narration> {
   const nameOf = (id: string) => model.actors.find((a) => a.id === id)?.name ?? id;
+  const index = branchIndex(model);
   const steps = flowItems(model)
     .flatMap(({ step, branch }) => (step ? [{ step, branch }] : []))
     .slice(0, MAX_STEPS);
@@ -54,7 +56,7 @@ export async function generateNarration(model: FlowModel, title: string): Promis
       kind: s.kind,
       ...(s.artifact ? { artifact: s.artifact } : {}),
       ...(s.assignee ? { assignee: s.assignee } : {}),
-      ...(branch ? { when: armContext(branch) } : {}),
+      ...(branch ? { when: chainContext(armChain(index, branch.id)) } : {}),
       ...(s.status === "provisional" ? { provisional: true } : {}),
     })),
   };

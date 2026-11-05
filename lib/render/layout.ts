@@ -1,3 +1,4 @@
+import { branchIndex, stepChain, walkFrames } from "@/lib/model/frames";
 import type { Actor, FlowModel, Step } from "@/lib/model/types";
 import { actorLabel, focusActorOf, visibleSteps } from "./mermaid";
 
@@ -26,6 +27,7 @@ export const FRAME_HEAD = 34; // 枠の上端から最初の行までの距離
 export const FRAME_TAIL = 16;
 export const FRAME_GAP = 14; // 枠の下端から次の行までの距離
 export const ELSE_GAP = 34; // 仕切りから次の行までの距離
+export const FRAME_INSET = 14; // 入れ子の枠を、外側の枠から左右に内へ寄せる幅
 export const NOTE_W = 140;
 export const NOTE_H = 32;
 export const BOTTOM = 70;
@@ -106,66 +108,59 @@ export function layoutDiagram(model: FlowModel): Layout {
   const frameW = lastCx - firstCx + LIFE_W + 20;
   const noteX = frameX + frameW + 20;
 
-  const branchById = new Map(model.branches.map((b) => [b.id, b]));
+  const index = branchIndex(model);
   const rows: LaidRow[] = [];
   const frames: LaidFrame[] = [];
   const notes: LaidNote[] = [];
 
   let y = FIRST_ROW_Y;
-  let open: { group: string; branch: string; frame: LaidFrame } | null = null;
+  /** 開いている枠（外側から順に）。入れ子の枠は、深さの分だけ左右を内へ寄せる */
+  const open: LaidFrame[] = [];
 
-  const closeFrame = () => {
-    if (!open) return;
-    open.frame.h = y + FRAME_TAIL - open.frame.y;
-    y += FRAME_TAIL + FRAME_GAP;
-    open = null;
-  };
-
-  for (const step of visibleSteps(model)) {
-    const branch = step.branchId ? branchById.get(step.branchId) : undefined;
-    const group = branch?.groupId ?? null;
-
-    if (group !== (open?.group ?? null)) {
-      closeFrame();
-      if (branch) {
-        const frame: LaidFrame = {
-          kind: branch.kind,
-          x: frameX,
-          y,
-          w: frameW,
-          h: 0,
-          conditions: [{ text: `[${branch.condition}]`, y: y + 4 }],
-          dividers: [],
-        };
-        frames.push(frame);
-        open = { group: branch.groupId, branch: branch.id, frame };
-        y += FRAME_HEAD;
-      }
-    } else if (branch && open && branch.id !== open.branch) {
+  for (const ev of walkFrames(visibleSteps(model), (step) => stepChain(index, step))) {
+    if (ev.type === "open") {
+      const inset = ev.depth * FRAME_INSET;
+      const frame: LaidFrame = {
+        kind: ev.arm.kind,
+        x: frameX + inset,
+        y,
+        w: frameW - inset * 2,
+        h: 0,
+        conditions: [{ text: `[${ev.arm.condition}]`, y: y + 4 }],
+        dividers: [],
+      };
+      frames.push(frame);
+      open.push(frame);
+      y += FRAME_HEAD;
+    } else if (ev.type === "else") {
       // 同じ枠の別の枝。else の仕切りを持てるのは alt だけ
-      if (branch.kind === "alt") {
-        open.frame.dividers.push(y);
-        open.frame.conditions.push({ text: `[${branch.condition}]`, y: y + 4 });
+      const frame = open[ev.depth];
+      if (ev.arm.kind === "alt" && frame) {
+        frame.dividers.push(y);
+        frame.conditions.push({ text: `[${ev.arm.condition}]`, y: y + 4 });
         y += ELSE_GAP;
       }
-      open.branch = branch.id;
+    } else if (ev.type === "close") {
+      const frame = open.pop();
+      if (frame) frame.h = y + FRAME_TAIL - frame.y;
+      y += FRAME_TAIL + FRAME_GAP;
+    } else {
+      const step = ev.item;
+      const self = step.from === step.to;
+      const msgY = y + MSG_OFFSET;
+      rows.push({
+        step,
+        msgY,
+        fromCx: cxOf.get(step.from) ?? firstCx,
+        toCx: cxOf.get(step.to) ?? firstCx,
+        self,
+      });
+      if (step.artifact) {
+        notes.push({ text: step.artifact, x: noteX, y: msgY - NOTE_H / 2, w: NOTE_W, h: NOTE_H });
+      }
+      y += ROW_H + (self ? SELF_EXTRA : 0);
     }
-
-    const self = step.from === step.to;
-    const msgY = y + MSG_OFFSET;
-    rows.push({
-      step,
-      msgY,
-      fromCx: cxOf.get(step.from) ?? firstCx,
-      toCx: cxOf.get(step.to) ?? firstCx,
-      self,
-    });
-    if (step.artifact) {
-      notes.push({ text: step.artifact, x: noteX, y: msgY - NOTE_H / 2, w: NOTE_W, h: NOTE_H });
-    }
-    y += ROW_H + (self ? SELF_EXTRA : 0);
   }
-  closeFrame();
 
   const rightEdge = notes.length > 0 ? noteX + NOTE_W : lastCx + LIFE_W / 2;
   return { actors, rows, frames, notes, width: rightEdge + MARGIN_X, height: y + BOTTOM };

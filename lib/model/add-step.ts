@@ -1,5 +1,6 @@
 import { visibleSteps } from "@/lib/render/mermaid";
 import { endOrder, orderInArm, orderJustAfter } from "./branch";
+import { branchIndex, stepChain } from "./frames";
 import type { ActorId, FlowModel, ModelOp, StepId } from "./types";
 
 /** 手で足すステップの入力（ステップ追加フォーム）。 */
@@ -21,7 +22,8 @@ export function nextStepId(model: FlowModel): StepId {
 
 /**
  * ステップを 1 つ足す op。afterStepId を渡すと、図の並びでそのステップの直後に入れる。
- * 渡さない・見つからないときは末尾。前後が同じ枠の中なら、前のステップと同じ場合に入れる。
+ * 渡さない・見つからないときは末尾。前後が同じ枠の中なら、前のステップと同じ場合に入れる
+ * （入れ子なら、前後に共通するいちばん内側の場合）。
  * into（場合の id）を渡すと、その場合の最後に入れる（空の枠の「＋ ここにステップを追加」）。
  */
 export function addStepOp(
@@ -35,17 +37,28 @@ export function addStepOp(
   const at = afterStepId ? steps.findIndex((s) => s.id === afterStepId) : -1;
   const prev = at >= 0 ? steps[at] : undefined;
   const next = at >= 0 ? steps[at + 1] : undefined;
-  const groupOf = new Map(model.branches.map((b) => [b.id, b.groupId]));
-  const group = (id: string | null) => (id ? groupOf.get(id) : undefined);
+  const index = branchIndex(model);
   let branchId: string | null = null;
   let order: number;
   if (into && intoOrder !== undefined) {
     branchId = into;
     order = intoOrder;
   } else if (prev) {
-    // 枠の途中（同じ枠の別の場合との境目も）に入れたら、前のステップの場合に入れる（枠が割れないように）
-    if (next && prev.branchId !== null && group(prev.branchId) === group(next.branchId)) branchId = prev.branchId;
-    order = branchId ? (prev.order + next!.order) / 2 : orderJustAfter(model, prev.order);
+    const before = stepChain(index, prev);
+    const after = next ? stepChain(index, next) : [];
+    if (next && prev.branchId !== null && before.at(-1)?.groupId === after.at(-1)?.groupId) {
+      // 枠の途中（同じ枠の別の場合との境目も）に入れたら、前のステップの場合に入れる（枠が割れないように）
+      branchId = prev.branchId;
+      order = (prev.order + next.order) / 2;
+    } else {
+      // 前のステップが枠の最後なら、その枠の後ろ。後ろのステップと共通する、いちばん内側の場合に入れる。
+      // 前後が同じ枠の別の場合の境目なら、前のステップの場合（外へ出すと枠が割れる）
+      let c = 0;
+      while (c < before.length && c < after.length && before[c].id === after[c].id) c += 1;
+      const boundary = before[c] !== undefined && after[c] !== undefined && before[c].groupId === after[c].groupId;
+      branchId = boundary ? before[c].id : c > 0 ? before[c - 1].id : null;
+      order = orderJustAfter(model, prev.order);
+    }
   } else order = endOrder(model);
   const artifact = input.artifact?.replace(/\s+/g, " ").trim();
   return {

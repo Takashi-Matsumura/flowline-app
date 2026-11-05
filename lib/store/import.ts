@@ -11,6 +11,7 @@ import type {
   StepFlags,
   StepStatus,
 } from "@/lib/model/types";
+import { MAX_FRAME_DEPTH } from "@/lib/model/frames";
 import { MAX_ACTORS } from "@/lib/model/limits";
 
 /**
@@ -109,14 +110,53 @@ function toActors(raw: unknown[]): Actor[] {
 
 function toBranches(raw: unknown[]): Branch[] {
   const ids = new Set<string>();
-  return raw.map((v) => {
+  const parentOf = new Map<string, unknown>();
+  const branches = raw.map((v) => {
     if (!isObj(v)) return fail("分岐の形式が正しくありません");
     const id = uniqueId(ids, v.id, ID_RE, "分岐");
     const kind = oneOf(v.kind, BRANCH_KINDS) ?? fail(`分岐 ${id} の種類が正しくありません`);
     const groupId = typeof v.groupId === "string" && ID_RE.test(v.groupId) ? v.groupId : fail(`分岐 ${id} の枠が正しくありません`);
     const branch: Branch = { id, kind, condition: str(v.condition), groupId, index: Math.trunc(num(v.index, 0)) };
     if (typeof v.order === "number" && Number.isFinite(v.order)) branch.order = v.order;
+    parentOf.set(id, v.parentId);
     return branch;
+  });
+  return withParents(branches, parentOf);
+}
+
+/**
+ * 枠の入れ子（Branch.parentId）を確かめて付ける。同じ枠の場合は、先に出てくる場合の外側の枠に揃える。
+ * 無い場合・自分の枠を指す・循環している・深すぎる入れ子は、つながりの壊れたデータとして全体を弾く。
+ */
+function withParents(branches: Branch[], parentOf: Map<string, unknown>): Branch[] {
+  const byId = new Map(branches.map((b) => [b.id, b]));
+  const groupParent = new Map<string, string | undefined>();
+  for (const b of branches) {
+    if (groupParent.has(b.groupId)) continue;
+    const p = parentOf.get(b.id);
+    if (p === undefined || p === null) {
+      groupParent.set(b.groupId, undefined);
+      continue;
+    }
+    const parent = typeof p === "string" ? byId.get(p) : undefined;
+    if (!parent || parent.groupId === b.groupId) return fail(`分岐 ${b.id} の外側の枠が見つかりません`);
+    groupParent.set(b.groupId, parent.id);
+  }
+  // いちばん外の枠まで、枠をたどる。循環・深すぎる入れ子は弾く
+  for (const groupId of groupParent.keys()) {
+    const seen = new Set([groupId]);
+    let parent = groupParent.get(groupId);
+    while (parent) {
+      const outer = byId.get(parent)!.groupId;
+      if (seen.has(outer)) return fail("枠の入れ子が循環しています");
+      seen.add(outer);
+      parent = groupParent.get(outer);
+    }
+    if (seen.size > MAX_FRAME_DEPTH) return fail(`枠の入れ子が深すぎます（${MAX_FRAME_DEPTH} 段まで）`);
+  }
+  return branches.map((b) => {
+    const parentId = groupParent.get(b.groupId);
+    return parentId ? { ...b, parentId } : b;
   });
 }
 
