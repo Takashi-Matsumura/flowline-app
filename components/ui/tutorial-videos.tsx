@@ -14,6 +14,7 @@ import { VoiceSelect } from "./voice";
 const VIDEOS = [
   { id: "01-overview", title: "アプリの概要", length: "12分" },
   { id: "02-drawing", title: "業務フロー図の描き方", length: "16分" },
+  { id: "03-nesting", title: "枠を組み合わせる", length: "9分" },
 ] as const;
 
 type Video = (typeof VIDEOS)[number];
