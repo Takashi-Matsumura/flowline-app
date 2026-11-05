@@ -1,5 +1,6 @@
+import { armChain, branchIndex, isUnderArm, isUnderGroup, stepChain } from "@/lib/model/frames";
 import type { Branch, FlowModel, Step } from "@/lib/model/types";
-import { drawnFrames, flowItems, visibleSteps } from "@/lib/render/mermaid";
+import { drawnFrames, flowItems, itemChain, visibleSteps } from "@/lib/render/mermaid";
 
 /**
  * 業務フロー図の点検（編集画面の「点検」パネル）。純関数。
@@ -55,6 +56,9 @@ export function reviewRules(model: FlowModel): Finding[] {
   const no = numberOf(model);
   const nameOf = (id: string) => model.actors.find((a) => a.id === id)?.name ?? id;
   const frames = drawnFrames(model);
+  const index = branchIndex(model);
+  /** 場合の中のステップ（内側の枠の中も含む） */
+  const stepsUnder = (armId: string) => steps.filter((s) => isUnderArm(index, s, armId));
   const trigger = model.actors.find((a) => a.role === "trigger");
   const end = model.actors.find((a) => a.role === "end");
 
@@ -104,18 +108,22 @@ export function reviewRules(model: FlowModel): Finding[] {
     });
   }
 
-  // 流れの最後（分岐で終わるなら、各場合の最後）が終点に届いているか
+  // 流れの最後（分岐で終わるなら、各場合の最後。場合が内側の枠で終わるなら、その各場合の最後）が終点に届いているか
   if (end) {
     const lastItem = flowItems(model).at(-1);
-    const lastGroup = lastItem?.branch?.groupId;
-    const tails: Step[] = lastGroup
-      ? frames
-          .find((arms) => arms[0].groupId === lastGroup)!
-          .flatMap((arm) => {
-            const last = steps.findLast((s) => s.branchId === arm.id);
-            return last ? [last] : [];
-          })
-      : [steps[steps.length - 1]];
+    const lastGroup = lastItem ? itemChain(index, lastItem)[0]?.groupId : undefined;
+    const tailsOf = (groupId: string): Step[] =>
+      model.branches
+        .filter((b) => b.groupId === groupId)
+        .sort((a, b) => a.index - b.index)
+        .flatMap((arm) => {
+          const last = stepsUnder(arm.id).at(-1);
+          if (!last) return [];
+          const chain = stepChain(index, last);
+          const inner = chain[chain.findIndex((b) => b.id === arm.id) + 1];
+          return inner ? tailsOf(inner.groupId) : [last];
+        });
+    const tails: Step[] = lastGroup ? tailsOf(lastGroup) : [steps[steps.length - 1]];
     const unreached = tails.filter((s) => s.to !== end.id && s.from !== end.id);
     if (unreached.length > 0) {
       out.push({
@@ -130,16 +138,17 @@ export function reviewRules(model: FlowModel): Finding[] {
     }
   }
 
-  // 差し戻し・却下で終わる場合: その後（直して出し直す・やり直す）が無い
-  // （枠は入れ子にできないので、くり返しの枠に囲まれているかは問わない）
+  // 差し戻し・却下で終わる場合: その後（直して出し直す・やり直す）が無い。
+  // くり返しの枠の中なら、くり返しでやり直せるので問わない（入れ子の外側の枠がくり返しでも）
   for (const arms of frames) {
     for (const arm of arms) {
-      const armSteps = steps.filter((s) => s.branchId === arm.id);
+      const armSteps = stepsUnder(arm.id);
       const last = armSteps.at(-1);
       const rejecting = REJECT_LIKE.test(arm.condition) || (last && REJECT_LIKE.test(last.label));
       if (!rejecting || !last) continue;
-      const after = steps.filter((s) => s.order > last.order && !arms.some((b) => b.id === s.branchId));
-      if (after.length > 0 || arm.kind === "loop") continue;
+      if (armChain(index, arm.id).some((b) => b.kind === "loop")) continue;
+      const after = steps.filter((s) => s.order > last.order && !isUnderGroup(index, s, arm.groupId));
+      if (after.length > 0) continue;
       out.push({
         id: `flow-reject-dead-end:${arm.id}`,
         severity: "high",
@@ -182,10 +191,10 @@ export function reviewRules(model: FlowModel): Finding[] {
     });
   }
 
-  // 空の場合
+  // 空の場合（中に枠だけがある場合は、その枠の空の場合として指摘する）
   for (const arms of frames) {
     for (const arm of arms) {
-      if (steps.some((s) => s.branchId === arm.id)) continue;
+      if (stepsUnder(arm.id).length > 0 || model.branches.some((b) => b.parentId === arm.id)) continue;
       out.push({
         id: `flow-empty-arm:${arm.id}`,
         severity: "medium",

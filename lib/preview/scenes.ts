@@ -1,5 +1,6 @@
+import { branchIndex, walkFrames } from "@/lib/model/frames";
 import type { Branch, FlowModel, Step } from "@/lib/model/types";
-import { actorLabel, flowItems } from "@/lib/render/mermaid";
+import { actorLabel, drawnElseArms, drawnFrames, flowItems, itemChain } from "@/lib/render/mermaid";
 
 /**
  * フローのプレビュー（components/editor/flow-player.tsx）で流す「場面」を、図のモデルから作る。純関数。
@@ -75,6 +76,12 @@ export function armContext(b: Branch): string {
   return `${cond(b)}の場合`;
 }
 
+/** 入れ子の枠の中のステップに添える文脈。外側の枠から順に（「「不備がある」の間くり返す中で、「軽微」の場合」） */
+export function chainContext(chain: readonly Branch[]): string | undefined {
+  if (chain.length === 0) return undefined;
+  return chain.map((b, i) => armContext(b) + (i < chain.length - 1 && b.kind === "loop" ? "中で" : "")).join("、");
+}
+
 function branchCaption(arms: Branch[]): string {
   const head = arms[0];
   if (head.kind === "loop") return `${cond(head)}の間、次の手順をくり返します。`;
@@ -122,54 +129,68 @@ export function buildScenes(model: FlowModel, title: string): Scene[] {
 
   let n = 0;
   let note = -1;
-  let frame = -1;
-  let elseIndex = -1;
-  let openGroup: string | null = null;
-  let openKind: Branch["kind"] | null = null;
-  let openArm: string | null = null;
-  let context: string | undefined;
-  let condition: string | undefined;
+  // 図の上の印は、図に描いた枠の順（外側の枠が先）で数える。else の見出しは、場合分けの枠をこの順に並べて
+  // 2 つ目以降の場合を数えたもの（mermaid-diagram.tsx の orderFrames が SVG もこの順に並べ直している）
+  const frames = drawnFrames(model);
+  const frameNo = new Map(frames.map((arms, k) => [arms[0].groupId, k]));
+  const elseNo = new Map(drawnElseArms(model).map((b, i) => [b.id, i]));
+  /** 開いている枠の、いまの場合（外側から順に） */
+  const open: Branch[] = [];
+  const index = branchIndex(model);
+  const events = walkFrames(items, (item) => itemChain(index, item));
+  const lastItem = events.findLastIndex((e) => e.type === "item");
 
-  items.forEach(({ step, branch }) => {
-    const groupId = branch?.groupId ?? null;
-    if (groupId !== openGroup) {
-      if (openKind) scenes.push({ kind: "join", heading: "合流", caption: JOIN_CAPTION[openKind], badges: [], mark: NO_MARK });
-      openGroup = groupId;
-      openKind = branch?.kind ?? null;
-      openArm = null;
-      context = undefined;
-      condition = undefined;
-      if (branch) {
-        frame += 1;
-        const arms = model.branches.filter((b) => b.groupId === branch.groupId).sort((a, b) => a.index - b.index);
-        const shown = branch.kind === "alt" ? arms : [branch];
-        scenes.push({
-          kind: "branch",
-          heading: FRAME_HEADING[branch.kind],
-          caption: branchCaption(shown),
-          speech: branchSpeech(shown),
-          badges: [],
-          mark: { ...NO_MARK, frame, condition: { first: true } },
-        });
-      }
+  const armScene = (arm: Branch, first: boolean) => {
+    // else を描くのは alt だけ（mermaid.ts）。opt・loop は入口の場面で条件を言っている
+    if (arm.kind !== "alt") return;
+    const frame = frameNo.get(arm.groupId) ?? -1;
+    const elseIndex = elseNo.get(arm.id);
+    scenes.push({
+      kind: "arm",
+      heading: FRAME_HEADING.alt,
+      caption: `${first ? "まず" : "次に"}${cond(arm)}の場合です。`,
+      badges: [],
+      mark: {
+        ...NO_MARK,
+        frame,
+        condition: first || elseIndex === undefined ? { first: true } : { first: false, index: elseIndex },
+      },
+    });
+  };
+
+  events.forEach((ev, i) => {
+    if (ev.type === "open") {
+      const arms = model.branches.filter((b) => b.groupId === ev.arm.groupId).sort((a, b) => a.index - b.index);
+      const shown = ev.arm.kind === "alt" ? arms : [ev.arm];
+      scenes.push({
+        kind: "branch",
+        heading: FRAME_HEADING[ev.arm.kind],
+        caption: branchCaption(shown),
+        speech: branchSpeech(shown),
+        badges: [],
+        mark: { ...NO_MARK, frame: frameNo.get(ev.arm.groupId) ?? -1, condition: { first: true } },
+      });
+      open.push(ev.arm);
+      armScene(ev.arm, true);
+      return;
     }
-    if (branch && branch.id !== openArm) {
-      const first = openArm === null;
-      openArm = branch.id;
-      context = armContext(branch);
-      condition = branch.condition.trim();
-      // else を描くのは alt だけ（mermaid.ts）。opt・loop は入口の場面で条件を言っている
-      if (branch.kind === "alt") {
-        if (!first) elseIndex += 1;
-        scenes.push({
-          kind: "arm",
-          heading: FRAME_HEADING.alt,
-          caption: `${first ? "まず" : "次に"}${cond(branch)}の場合です。`,
-          badges: [],
-          mark: { ...NO_MARK, frame, condition: first ? { first: true } : { first: false, index: elseIndex } },
-        });
-      }
+    if (ev.type === "else") {
+      open[ev.depth] = ev.arm;
+      armScene(ev.arm, false);
+      return;
     }
+    if (ev.type === "close") {
+      open.pop();
+      // 流れの最後で閉じる枠と、続けて外側の枠も閉じるとき（内側の合流）は、合流を言わない
+      const next = events[i + 1];
+      if (i < lastItem && next?.type !== "close") {
+        scenes.push({ kind: "join", heading: "合流", caption: JOIN_CAPTION[ev.arm.kind], badges: [], mark: NO_MARK });
+      }
+      return;
+    }
+    const { step } = ev.item;
+    const context = chainContext(open);
+    const condition = open.at(-1)?.condition.trim();
     if (step === null) {
       const last = scenes[scenes.length - 1];
       last.caption += "この場合の手順は、まだ書かれていません。";

@@ -6,8 +6,10 @@ import { PanelSection } from "./step-panel";
 import {
   addEmptyArmOps,
   armConditionPrefix,
+  armHasContent,
   BRANCH_KINDS,
   branchKindLabel,
+  canNestIn,
   enterBranchOps,
   groupArms,
   leaveBranchOps,
@@ -15,6 +17,7 @@ import {
   removeGroupOps,
   setGroupKindOps,
 } from "@/lib/model/branch";
+import { armChain, branchIndex, isUnderArm } from "@/lib/model/frames";
 import type { Branch, FlowModel, ModelOp } from "@/lib/model/types";
 import { drawnFrames, visibleSteps } from "@/lib/render/mermaid";
 
@@ -24,18 +27,22 @@ import { drawnFrames, visibleSteps } from "@/lib/render/mermaid";
  * 分岐は先に枠を作り（ツールバーの「＋ 分岐を追加」）、中にステップを足す。ここでは作った枠を直す。
  * - 枠の中のステップ: 枠の中身を小さな見取り図で見せ、そこで条件・場合の順番を直し、場合ごとにステップを足す
  * - 枠の外のステップ: 分岐の作り方を案内し、作ってある枠があれば、そこへ入れられるようにする
+ * 枠は入れ子にできる（くり返しの中の場合分けなど）。見取り図はいちばん内側の枠のもので、外側の枠は上に並べて示す。
  */
 export function BranchSection({
   model,
   stepId,
   onCommit,
   onAddInto,
+  onBranchInto,
 }: {
   model: FlowModel;
   stepId: string;
   onCommit: (ops: ModelOp[]) => void;
   /** 場合（branchId）の最後にステップを足すフォームを開く */
   onAddInto: (branchId: string) => void;
+  /** 場合（branchId）の中に枠を作るフォームを開く（入れ子） */
+  onBranchInto: (branchId: string) => void;
 }) {
   const step = model.steps.find((s) => s.id === stepId);
   const branch = step?.branchId ? model.branches.find((b) => b.id === step.branchId) : undefined;
@@ -50,6 +57,7 @@ export function BranchSection({
           branch={branch}
           onCommit={onCommit}
           onAddInto={onAddInto}
+          onBranchInto={onBranchInto}
         />
       ) : (
         <>
@@ -94,6 +102,11 @@ const enter = (fn: () => void) => (e: React.KeyboardEvent) => {
   }
 };
 
+/** 場合の短い呼び名（「繰り返し「不備がある間」」）。どの枠の中かを示すときに使う */
+export function armLabel(arm: Branch): string {
+  return `${branchKindLabel(arm.kind)}「${arm.condition.trim() || "（条件が未入力）"}」`;
+}
+
 /** 場合を「もし［〜］なら」の形で */
 const armText = (arm: Branch, i: number) =>
   `${i > 0 && arm.kind === "alt" ? "そうでなく" : KIND_TEXT[arm.kind].before}［${arm.condition}］${KIND_TEXT[arm.kind].after}`;
@@ -115,8 +128,9 @@ function EnterFrame({
   exceptGroup: string | null;
   onCommit: (ops: ModelOp[]) => void;
 }) {
+  const index = branchIndex(model);
   const frames = drawnFrames(model)
-    .map((arms, k) => ({ arms, k }))
+    .map((arms, k) => ({ arms, k, depth: armChain(index, arms[0].id).length }))
     .filter(({ arms }) => arms[0]?.groupId !== exceptGroup);
   if (frames.length === 0) return null;
   return (
@@ -128,8 +142,12 @@ function EnterFrame({
         onChange={(e) => e.target.value && onCommit(enterBranchOps(model, stepId, e.target.value))}
       >
         <option value="">枠と場合を選ぶ…</option>
-        {frames.map(({ arms, k }) => (
-          <optgroup key={arms[0].groupId} label={`枠 ${k + 1}（${branchKindLabel(arms[0].kind)}）`}>
+        {frames.map(({ arms, k, depth }) => (
+          <optgroup
+            key={arms[0].groupId}
+            // 入れ子の枠は、外側の枠の下に字下げして示す
+            label={`${depth > 1 ? `${"　".repeat(depth - 2)}└ ` : ""}枠 ${k + 1}（${branchKindLabel(arms[0].kind)}）`}
+          >
             {arms.map((arm, i) => (
               <option key={arm.id} value={arm.id}>
                 {armText(arm, i)}
@@ -142,11 +160,12 @@ function EnterFrame({
   );
 }
 
-/** 図の番号つきで、その場合に入っているステップ */
+/** 図の番号つきで、その場合に入っているステップ（内側の枠の中も。nested はその印） */
 function armSteps(model: FlowModel, branchId: string) {
+  const index = branchIndex(model);
   return visibleSteps(model)
-    .map((s, i) => ({ step: s, n: i + 1 }))
-    .filter((x) => x.step.branchId === branchId);
+    .map((s, i) => ({ step: s, n: i + 1, nested: s.branchId !== branchId }))
+    .filter((x) => isUnderArm(index, x.step, branchId));
 }
 
 function InBranch({
@@ -155,14 +174,18 @@ function InBranch({
   branch,
   onCommit,
   onAddInto,
+  onBranchInto,
 }: {
   model: FlowModel;
   stepId: string;
   branch: Branch;
   onCommit: (ops: ModelOp[]) => void;
   onAddInto: (branchId: string) => void;
+  onBranchInto: (branchId: string) => void;
 }) {
   const arms = groupArms(model, branch.groupId);
+  // この枠を囲む外側の枠の場合（外側から順）
+  const outer = armChain(branchIndex(model), branch.id).slice(0, -1);
   const [draft, setDraft] = useState<{ for: string; text: string } | null>(null);
   const key = `${branch.id}:${branch.condition}`;
   const condition = draft?.for === key ? draft.text : branch.condition;
@@ -188,6 +211,17 @@ function InBranch({
 
   return (
     <>
+      {outer.length > 0 && (
+        <div className="flex flex-col gap-0.5 text-xs text-zinc-600 dark:text-zinc-300">
+          <span className={caption}>この枠は、次の枠の中にあります（入れ子）</span>
+          {outer.map((arm, i) => (
+            <span key={arm.id} style={{ paddingLeft: `${i * 0.75}rem` }}>
+              {i > 0 && "└ "}
+              {armLabel(arm)}
+            </span>
+          ))}
+        </div>
+      )}
       {/* 枠の見取り図。いまのステップが入っている場合を強調し、そこで条件と順番を直す */}
       <div className="rounded-md border border-dashed border-violet-400/70 dark:border-violet-400/50">
         <div className="flex items-center gap-2 border-b border-dashed border-violet-400/70 px-2.5 py-1.5 dark:border-violet-400/50">
@@ -228,8 +262,13 @@ function InBranch({
                 <div className="flex items-start gap-1.5">
                   <ul className="min-w-0 flex-1 text-xs">
                     {steps.length === 0 && <li className="text-zinc-400">（まだステップがありません）</li>}
-                    {steps.map(({ step, n }) => (
-                      <li key={step.id} className={step.id === stepId ? "font-medium text-sky-700 dark:text-sky-300" : "text-zinc-600 dark:text-zinc-400"}>
+                    {steps.map(({ step, n, nested }) => (
+                      <li
+                        key={step.id}
+                        title={nested ? "この場合の中の、内側の枠に入っているステップです" : undefined}
+                        className={`${nested ? "pl-3" : ""} ${step.id === stepId ? "font-medium text-sky-700 dark:text-sky-300" : "text-zinc-600 dark:text-zinc-400"}`}
+                      >
+                        {nested && "└ "}
                         {n}. {step.label}
                         {step.id === stepId && "（このステップ）"}
                       </li>
@@ -278,7 +317,17 @@ function InBranch({
                       このステップをここへ移す
                     </button>
                   )}
-                  {steps.length === 0 && arms.length > 1 && (
+                  {canNestIn(model, arm.id) && (
+                    <button
+                      type="button"
+                      className="w-fit whitespace-nowrap rounded px-1.5 py-0.5 text-xs text-sky-700 hover:bg-sky-100 dark:text-sky-300 dark:hover:bg-sky-500/10"
+                      title="この場合の最後に、枠を入れ子で作ります（くり返しの中の場合分けなど）"
+                      onClick={() => onBranchInto(arm.id)}
+                    >
+                      ＋ この中に分岐を追加
+                    </button>
+                  )}
+                  {!armHasContent(model, arm.id) && arms.length > 1 && (
                     <button
                       type="button"
                       className="w-fit rounded px-1.5 py-0.5 text-xs text-zinc-500 hover:bg-black/5 dark:hover:bg-white/10"
@@ -359,10 +408,14 @@ function InBranch({
         <button
           type="button"
           className={btn}
-          title="このステップだけを枠の外に出します（枠とほかのステップはそのまま）"
+          title={
+            outer.length > 0
+              ? "このステップだけを、1 つ外側の枠に出します（枠とほかのステップはそのまま）"
+              : "このステップだけを枠の外に出します（枠とほかのステップはそのまま）"
+          }
           onClick={() => onCommit(leaveBranchOps(model, stepId))}
         >
-          このステップを枠の外へ
+          {outer.length > 0 ? "このステップを外側の枠へ" : "このステップを枠の外へ"}
         </button>
         {confirming ? (
           <>
@@ -388,7 +441,12 @@ function InBranch({
           </button>
         )}
       </div>
-      {confirming && <p className={caption}>枠だけを消します。中のステップは消えずに残ります。</p>}
+      {confirming && (
+        <p className={caption}>
+          枠だけを消します。中のステップ{model.branches.some((b) => arms.some((a) => a.id === b.parentId)) ? "と内側の枠" : ""}は消えずに
+          {outer.length > 0 ? "、外側の枠の中に" : ""}残ります。
+        </p>
+      )}
     </>
   );
 }

@@ -92,6 +92,13 @@ export type Branch = {
    * 中にステップが無いので、これで描く位置を決める。中にステップがあれば使わない（ステップの位置で決まる）
    */
   order?: number;
+  /**
+   * この枠を囲む外側の枠の場合（Branch.id）。無ければいちばん外の枠。UML の複合フラグメントの入れ子
+   * （くり返しの中の場合分けなど）を表す。同じ枠（groupId）の場合はすべて同じ値を持つ。
+   * 中のステップは、外側の枠の場合にも属する（ステップの branchId は、いちばん内側の場合を指す）。
+   * 入れ子の深さは lib/model/frames.ts の MAX_FRAME_DEPTH まで
+   */
+  parentId?: string;
 };
 
 export type IssueKind =
@@ -186,8 +193,16 @@ export type ModelOp =
    * 分岐の条件・種類・場合の順番（index）を変える。種類は枠全体で揃えること（branch.ts の setGroupKindOps）。
    * index を変えるときは、ステップの並びも合わせること（branch.ts の moveArmOps）
    */
-  | { op: "branch.update"; id: string; patch: { condition?: string; kind?: Branch["kind"]; index?: number } }
-  /** 分岐（枠の 1 つの場合）を消す。中にあったステップは枠の外に出す（ステップ自体は消さない） */
+  | {
+      op: "branch.update";
+      id: string;
+      /** order は空の枠の位置（場合の入れ替えで、中の空の枠も一緒に動かすとき） */
+      patch: { condition?: string; kind?: Branch["kind"]; index?: number; order?: number };
+    }
+  /**
+   * 分岐（枠の 1 つの場合）を消す。中にあったステップと、中の枠は、1 つ外へ出す
+   * （外側の枠の場合へ。いちばん外の枠なら枠の外へ）。ステップ自体は消さない
+   */
   | { op: "branch.remove"; id: string }
   | { op: "issue.add"; issue: NewIssue }
   /**

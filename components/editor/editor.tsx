@@ -15,7 +15,8 @@ import { addStepOp, type StepInput } from "@/lib/model/add-step";
 import { moveStepOps } from "@/lib/model/move";
 import { noteMarks } from "@/lib/model/notes";
 import { applyOps } from "@/lib/model/reducer";
-import { addFrameOps, enterBranchOps } from "@/lib/model/branch";
+import { addFrameOps, canNestIn, enterBranchOps } from "@/lib/model/branch";
+import { armChain, branchIndex } from "@/lib/model/frames";
 import type { Branch, FlowModel, ModelOp } from "@/lib/model/types";
 import { stripPlaceholders } from "@/lib/render/export";
 import { dutiesReadiness } from "@/lib/summary/readiness";
@@ -51,7 +52,8 @@ type Panel =
   | { mode: "edit"; stepId: string }
   /** into: その場合（空の枠の「＋ ここにステップを追加」など）の最後に入れる */
   | { mode: "add"; afterStepId: string | null; into?: string; initialFrom?: string; seq: number }
-  | { mode: "branch"; afterStepId: string | null; seq: number }
+  /** parentId: その場合の中に作る（空の場合の中に枠を入れ子にするとき）。afterStepId より優先 */
+  | { mode: "branch"; afterStepId: string | null; parentId?: string; seq: number }
   /** 図の点検。focus は、指摘から示している図の手順（1 始まり。0 なら無し） */
   | { mode: "review"; focus: number }
   /** 枠（groupId）の付箋。図の枠の見出しの札を右クリックする・札の横の付箋の印を押すと開く */
@@ -142,13 +144,15 @@ export function Editor({
   // ── 枠（alt / opt / loop）を畳む。画面の見え方だけで、図のデータは変えない ──
   const [collapsed, setCollapsed] = useCollapsedFrames(slug, initialCollapsed);
   const frames = frameIds(model);
-  // 選んでいる・点検で示している・中に足そうとしているステップの枠は、畳んでいても開いて見せる
+  // 選んでいる・点検で示している・中に足そうとしているステップの枠は、畳んでいても開いて見せる（外側の枠も）
+  const branchById = branchIndex(model);
   const shownGroups = new Set(
     [
       steps[selectedIndex]?.branchId,
       panel?.mode === "review" ? steps[panel.focus - 1]?.branchId : undefined,
       intoArm?.id,
-    ].flatMap((id) => model.branches.find((b) => b.id === id)?.groupId ?? []),
+      panel?.mode === "branch" ? panel.parentId : undefined,
+    ].flatMap((id) => armChain(branchById, id).map((b) => b.groupId)),
   );
   const folded = [...collapsed].filter((g) => frames.includes(g) && !shownGroups.has(g)).sort();
   const foldedKey = folded.join(",");
@@ -232,7 +236,7 @@ export function Editor({
   const moveStep = (index: number, insertAt: number, inside?: { frame: number; arm: number } | null) => {
     const target =
       inside === undefined ? undefined : inside === null ? null : drawnFrames(model, foldedSet)[inside.frame]?.[inside.arm];
-    const ops = moveStepOps(steps, index, insertAt, target);
+    const ops = moveStepOps(steps, index, insertAt, target, model.branches);
     if (ops.length === 0) return;
     commit(ops);
     setPanel({ mode: "edit", stepId: steps[index].id });
@@ -251,7 +255,16 @@ export function Editor({
   // いま選んでいるステップ（編集中、または追加する位置）。その後ろに足す
   const selectedId = selectedIndex >= 0 ? steps[selectedIndex].id : null;
   const openAdd = () => setPanel({ mode: "add", afterStepId: selectedId, seq: nextSeq });
-  const openBranch = () => setPanel({ mode: "branch", afterStepId: selectedId, seq: nextSeq });
+  // 場合の中にステップを足そうとしているときは、その場合の中に枠を作る（入れ子）
+  const openBranch = () =>
+    setPanel(
+      intoArm && canNestIn(model, intoArm.id)
+        ? { mode: "branch", afterStepId: null, parentId: intoArm.id, seq: nextSeq }
+        : { mode: "branch", afterStepId: selectedId, seq: nextSeq },
+    );
+  /** 場合（branchId）の中に枠を作るフォームを開く */
+  const openBranchInto = (branchId: string) =>
+    setPanel({ mode: "branch", afterStepId: null, parentId: branchId, seq: nextSeq });
   /** 場合（branchId）の最後にステップを足すフォームを開く */
   const openAddInto = (branchId: string) => setPanel({ mode: "add", afterStepId: null, into: branchId, seq: nextSeq });
   const pickPlaceholder = (k: number) => {
@@ -271,8 +284,10 @@ export function Editor({
         : { mode: "edit", stepId: id },
     );
   };
-  const createFrame = (kind: Branch["kind"], conditions: string[]) => {
-    const { ops, armIds } = addFrameOps(model, kind, conditions, panel?.mode === "branch" ? panel.afterStepId : null);
+  /** parentId: 作る枠を囲む場合（null = どの枠の外） */
+  const createFrame = (kind: Branch["kind"], conditions: string[], parentId: string | null) => {
+    const after = panel?.mode === "branch" && !panel.parentId ? panel.afterStepId : null;
+    const { ops, armIds } = addFrameOps(model, kind, conditions, after, parentId);
     if (ops.length === 0) return;
     commit(ops);
     // 作った枠の最初の場合に、そのままステップを足せるようにする
@@ -456,7 +471,13 @@ export function Editor({
             onCommit={commit}
             onPreview={setPreview}
           >
-            <BranchSection model={model} stepId={panel.stepId} onCommit={commit} onAddInto={openAddInto} />
+            <BranchSection
+              model={model}
+              stepId={panel.stepId}
+              onCommit={commit}
+              onAddInto={openAddInto}
+              onBranchInto={openBranchInto}
+            />
           </StepPanel>
         )}
         {panel?.mode === "add" && drawable && (
@@ -496,6 +517,7 @@ export function Editor({
             key={panel.seq}
             model={model}
             afterStepId={afterIndex >= 0 ? panel.afterStepId : null}
+            parentId={panel.parentId && model.branches.some((b) => b.id === panel.parentId) ? panel.parentId : null}
             onCreate={createFrame}
             onClose={() => setPanel(null)}
           />

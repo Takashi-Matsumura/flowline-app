@@ -2,31 +2,42 @@
 
 import { useState } from "react";
 import { PanelSection } from "./step-panel";
-import { conditionPrefix } from "@/lib/model/branch";
+import { conditionPrefix, frameContainers } from "@/lib/model/branch";
+import { MAX_FRAME_DEPTH } from "@/lib/model/frames";
 import type { Branch, FlowModel } from "@/lib/model/types";
 import { visibleSteps } from "@/lib/render/mermaid";
-import { KIND_TEXT } from "./branch-section";
+import { KIND_TEXT, armLabel } from "./branch-section";
 
 /**
  * 分岐（枠）を先に作るフォーム（「＋ 分岐を追加」）。ステップの追加と同じ場所（図の右、狭い画面では下）に出す。
  * 種類と条件だけを決めて空の枠を作り、中のステップはあとから場合ごとに足す。
  * 「もし〜なら」は最初から条件を 2 つ出す（「そうでなければ」まで一度に作れるように）。
+ * 選んだステップが枠の中なら、どの枠の中に作るか（入れ子）を選べる。既定はいちばん内側の場合の中。
  */
 export function BranchAddPanel({
   model,
   afterStepId,
+  parentId,
   onCreate,
   onClose,
 }: {
   model: FlowModel;
-  /** このステップの直後に作る（そのステップが枠の中なら、枠の直後）。null なら図の最後 */
+  /** このステップの直後に作る（選んだ枠の中で、枠を割らない位置）。null なら図の最後 */
   afterStepId: string | null;
-  onCreate: (kind: Branch["kind"], conditions: string[]) => void;
+  /** この場合の中（の最後）に作る。渡すと afterStepId は使わない */
+  parentId: string | null;
+  /** parentId: 作る枠を囲む場合（null = どの枠の外） */
+  onCreate: (kind: Branch["kind"], conditions: string[], parentId: string | null) => void;
   onClose: () => void;
 }) {
   const steps = visibleSteps(model);
-  const afterIndex = afterStepId ? steps.findIndex((s) => s.id === afterStepId) : -1;
+  const afterIndex = !parentId && afterStepId ? steps.findIndex((s) => s.id === afterStepId) : -1;
   const after = afterIndex >= 0 ? steps[afterIndex] : undefined;
+  const fixedParent = parentId ? model.branches.find((b) => b.id === parentId) : undefined;
+  // 作れる場所: どの枠の外か、選んだステップを囲む場合（外側から順）。既定はいちばん内側
+  const containers = fixedParent ? [fixedParent] : frameContainers(model, after?.id ?? null);
+  const [containerId, setContainerId] = useState<string | null>(containers.at(-1)?.id ?? null);
+  const container = containers.find((c) => (c?.id ?? null) === containerId) ?? null;
   // 条件の書き出し。場合分けは直前のステップの結果で分かれることが多いので、そのステップ名を主語にしておく
   // （「〜のときだけ」「〜の間くり返す」には合わないので入れない）
   const altPrefix = after ? conditionPrefix(after.label) : "";
@@ -51,10 +62,14 @@ export function BranchAddPanel({
       cs.map((c) => (next !== "alt" && c === altPrefix ? "" : next === "alt" && c === "" ? altPrefix : c)),
     );
   };
-  const position = after ? `${afterIndex + 1} 番の後に作ります` : "図の最後に作ります";
+  const position = fixedParent
+    ? `${armLabel(fixedParent)}の中に作ります`
+    : after
+      ? `${afterIndex + 1} 番の後に作ります`
+      : "図の最後に作ります";
   const text = KIND_TEXT[kind];
   const submit = () => {
-    if (ready) onCreate(kind, used);
+    if (ready) onCreate(kind, used, container?.id ?? null);
   };
   const setAt = (i: number, value: string) => setConditions((cs) => cs.map((c, k) => (k === i ? value : c)));
 
@@ -107,6 +122,36 @@ export function BranchAddPanel({
               </label>
             ))}
           </PanelSection>
+
+          {containers.length > 1 && (
+            <PanelSection title="どこに作りますか？">
+              {containers.map((c) => (
+                <label
+                  key={c?.id ?? "top"}
+                  className="flex cursor-pointer items-start gap-2 rounded-md border border-black/15 px-3 py-2 has-[:checked]:border-sky-500 has-[:checked]:bg-sky-50 dark:border-white/20 dark:has-[:checked]:bg-sky-500/10"
+                >
+                  <input
+                    type="radio"
+                    name="frame-container"
+                    className="mt-1"
+                    checked={(c?.id ?? null) === containerId}
+                    onChange={() => setContainerId(c?.id ?? null)}
+                  />
+                  <span className="flex flex-col">
+                    <span className="text-sm">{c ? `${armLabel(c)}の中` : "どの枠にも入れない"}</span>
+                    <span className="text-xs text-zinc-500">
+                      {(c?.id ?? null) === (after?.branchId ?? null)
+                        ? `${afterIndex + 1} 番のすぐ後に作ります`
+                        : `${afterIndex + 1} 番を囲む枠の後に作ります`}
+                    </span>
+                  </span>
+                </label>
+              ))}
+              <p className="text-xs text-zinc-500">
+                枠の中に枠を作ると、入れ子になります（くり返しの中の場合分けなど）。{MAX_FRAME_DEPTH} 段まで作れます。
+              </p>
+            </PanelSection>
+          )}
 
           <PanelSection title={kind === "alt" ? "場合ごとの条件" : "条件"}>
             {used.map((c, i) => (

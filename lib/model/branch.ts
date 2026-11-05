@@ -1,4 +1,12 @@
 import { visibleSteps } from "@/lib/render/mermaid";
+import {
+  armChain,
+  branchIndex,
+  chainHasArm,
+  isUnderArm,
+  MAX_FRAME_DEPTH,
+  stepChain,
+} from "./frames";
 import type { Branch, FlowModel, ModelOp, Step, StepId } from "./types";
 
 /**
@@ -8,6 +16,9 @@ import type { Branch, FlowModel, ModelOp, Step, StepId } from "./types";
  * 枠は「図の並びで連続しているステップ」を囲んで描かれる（toMermaid）。同じ枠（groupId）の
  * ステップが途中で途切れると枠が 2 つに割れるので、枠に出し入れするときは order も動かして、
  * 枠の中身が連続したままになるようにする。場合（alt の else）は index の順に並べる。
+ *
+ * 枠は入れ子にできる（Branch.parentId。lib/model/frames.ts）。場合の「中身」は、内側の枠の中の
+ * ステップと、中身の無い内側の枠の位置も含む。外側の枠の中身も連続したままになるように動かす。
  */
 
 export const BRANCH_KINDS: { kind: Branch["kind"]; label: string; hint: string }[] = [
@@ -28,21 +39,33 @@ export function groupArms(model: FlowModel, groupId: string): Branch[] {
   return model.branches.filter((b) => b.groupId === groupId).sort((a, b) => a.index - b.index);
 }
 
-/** rest（並び）の at 番目の手前に入れるときの order */
-function orderAt(rest: Step[], at: number, fallback: number): number {
-  const prev = rest[at - 1];
-  const next = rest[at];
-  return prev && next ? (prev.order + next.order) / 2 : prev ? prev.order + 1 : next ? next.order - 1 : fallback;
+/** 中にステップが 1 つも無い（内側の枠の中にも無い）枠。図の上の位置は、場合の order で決まる */
+function emptyFrames(model: FlowModel, steps: Step[]): Branch[][] {
+  const index = branchIndex(model);
+  const filled = new Set(steps.flatMap((s) => stepChain(index, s).map((b) => b.groupId)));
+  const groups = new Map<string, Branch[]>();
+  for (const b of model.branches) groups.set(b.groupId, [...(groups.get(b.groupId) ?? []), b]);
+  return [...groups.entries()].filter(([g]) => !filled.has(g)).map(([, arms]) => arms);
 }
 
 /** 中にステップが 1 つも無い枠の、置き場所（order）。図の並びの中で、ステップと同じ物差しで数える */
 function emptyFrameOrders(model: FlowModel, steps: Step[]): number[] {
-  const filled = new Set(steps.map((s) => s.branchId));
-  const groups = new Map<string, Branch[]>();
-  for (const b of model.branches) groups.set(b.groupId, [...(groups.get(b.groupId) ?? []), b]);
-  return [...groups.values()]
-    .filter((arms) => arms.every((b) => !filled.has(b.id)))
+  return emptyFrames(model, steps).flatMap((arms) => arms.flatMap((b) => (b.order !== undefined ? [b.order] : [])));
+}
+
+/** 場合 armId の中身の位置（中のステップ・内側の枠の中のステップ・中身の無い内側の枠） */
+function armPositions(model: FlowModel, steps: Step[], armId: string): number[] {
+  const index = branchIndex(model);
+  const own = steps.filter((s) => isUnderArm(index, s, armId)).map((s) => s.order);
+  const empty = emptyFrames(model, steps)
+    .filter((arms) => chainHasArm(armChain(index, arms[0].parentId), armId))
     .flatMap((arms) => arms.flatMap((b) => (b.order !== undefined ? [b.order] : [])));
+  return [...own, ...empty];
+}
+
+/** 枠 groupId の中身の位置（すべての場合） */
+function groupPositions(model: FlowModel, steps: Step[], groupId: string): number[] {
+  return groupArms(model, groupId).flatMap((b) => armPositions(model, steps, b.id));
 }
 
 /** o より後ろで、いちばん近い位置（ステップか、空の枠）。無ければ undefined */
@@ -73,40 +96,70 @@ export function endOrder(model: FlowModel): number {
 }
 
 /**
- * afterStepId のステップの直後の位置。そのステップが枠の中なら、枠の直後（枠の中に枠は作れないため）。
- * afterStepId が無い・見つからないときは図の最後。
+ * afterStepId のステップの直後の位置で、場合 container の中（null = どの枠の外）。
+ * ステップが container の内側の枠の中にいるなら、その枠の直後（container の中で、枠を割らない位置）。
+ * container がステップのいちばん内側の場合なら、ステップのすぐ後ろ。
+ * container がステップの外側の場合でなければ、どの枠の外として扱う。afterStepId が無い・見つからないときは図の最後。
  */
-export function orderAfterStep(model: FlowModel, afterStepId: StepId | null | undefined): number {
+export function orderAfterStep(
+  model: FlowModel,
+  afterStepId: StepId | null | undefined,
+  container: string | null = null,
+): number {
   const steps = visibleSteps(model);
   const at = afterStepId ? steps.find((s) => s.id === afterStepId) : undefined;
   if (!at) return endOrder(model);
-  const groupOf = new Map(model.branches.map((b) => [b.id, b.groupId]));
-  const group = at.branchId ? groupOf.get(at.branchId) : undefined;
-  const last = group ? steps.findLast((s) => s.branchId !== null && groupOf.get(s.branchId) === group)! : at;
-  return between(last.order, nextOrderAfter(model, steps, last.order));
+  const chain = stepChain(branchIndex(model), at);
+  const depth = container === null ? -1 : chain.findIndex((b) => b.id === container);
+  // container の中で、ステップを囲んでいる枠（無ければステップそのもの）
+  const frame = chain[depth + 1];
+  const last = frame ? Math.max(at.order, ...groupPositions(model, steps, frame.groupId)) : at.order;
+  return between(last, nextOrderAfter(model, steps, last));
 }
 
 /**
- * 場合（branchId）の最後にステップを足すときの order。場合が空なら、同じ枠の前の場合の後ろ
- * （無ければ後ろの場合の手前、枠がまるごと空なら枠の位置）。
+ * afterStepId の直後に枠を作るとき、どの場合の中に作れるか。null（どの枠の外）と、ステップを囲む場合を
+ * 外側から順に。入れ子の深さが上限に届く場合（その中には作れない）は除く。
+ */
+export function frameContainers(model: FlowModel, afterStepId: StepId | null): (Branch | null)[] {
+  const at = afterStepId ? visibleSteps(model).find((s) => s.id === afterStepId) : undefined;
+  const chain = at ? stepChain(branchIndex(model), at) : [];
+  return [null, ...chain.filter((_, i) => i + 1 < MAX_FRAME_DEPTH)];
+}
+
+/** 場合 armId の中に、さらに枠を作れるか（入れ子の深さの上限） */
+export function canNestIn(model: FlowModel, armId: string): boolean {
+  return armChain(branchIndex(model), armId).length < MAX_FRAME_DEPTH;
+}
+
+/**
+ * 場合（branchId）の最後にステップ（や枠）を足すときの order。場合が空なら、同じ枠の前の場合の後ろ
+ * （無ければ後ろの場合の手前、枠がまるごと空なら枠の位置）。中身は内側の枠も含めて数える。
  */
 export function orderInArm(model: FlowModel, branchId: string): number | undefined {
   const branch = model.branches.find((b) => b.id === branchId);
   if (!branch) return undefined;
   const steps = visibleSteps(model);
-  const own = steps.findLast((s) => s.branchId === branchId);
-  if (own) return between(own.order, nextOrderAfter(model, steps, own.order));
+  const own = armPositions(model, steps, branchId);
+  if (own.length > 0) {
+    const last = Math.max(...own);
+    return between(last, nextOrderAfter(model, steps, last));
+  }
   const arms = groupArms(model, branch.groupId);
   const i = arms.findIndex((b) => b.id === branchId);
   for (const b of arms.slice(0, i).reverse()) {
-    const last = steps.findLast((s) => s.branchId === b.id);
-    if (last) return between(last.order, nextOrderAfter(model, steps, last.order));
+    const pos = armPositions(model, steps, b.id);
+    if (pos.length > 0) {
+      const last = Math.max(...pos);
+      return between(last, nextOrderAfter(model, steps, last));
+    }
   }
   for (const b of arms.slice(i + 1)) {
-    const first = steps.find((s) => s.branchId === b.id);
-    if (first) {
-      const prev = prevOrderBefore(model, steps, first.order);
-      return prev === undefined ? first.order - 1 : (prev + first.order) / 2;
+    const pos = armPositions(model, steps, b.id);
+    if (pos.length > 0) {
+      const first = Math.min(...pos);
+      const prev = prevOrderBefore(model, steps, first);
+      return prev === undefined ? first - 1 : (prev + first) / 2;
     }
   }
   return arms.find((b) => b.order !== undefined)?.order;
@@ -114,25 +167,30 @@ export function orderInArm(model: FlowModel, branchId: string): number | undefin
 
 /**
  * 空の枠を新しく作る（「＋ 分岐を追加」）。conditions の数だけ場合を作る（場合分け以外は 1 つ）。
- * 置き場所は afterStepId の直後（無ければ図の最後）。中のステップは、あとから場合ごとに足す。
- * 作った場合の id を、上から順に返す。
+ * parentId（外側の枠の場合）を渡すと、その中に作る（入れ子）。置き場所は afterStepId の直後
+ * （parentId の中で、枠を割らない位置。orderAfterStep）。afterStepId が無ければ、parentId の最後
+ * （parentId も無ければ図の最後）。中のステップは、あとから場合ごとに足す。
+ * 作った場合の id を、上から順に返す。入れ子の深さが上限を超えるなら作らない。
  */
 export function addFrameOps(
   model: FlowModel,
   kind: Branch["kind"],
   conditions: string[],
   afterStepId: StepId | null,
+  parentId: string | null = null,
 ): { ops: ModelOp[]; armIds: string[] } {
   const texts = conditions.map((c) => c.replace(/\s+/g, " ").trim()).filter((c) => c !== "");
   const used = kind === "alt" ? texts : texts.slice(0, 1);
-  if (used.length === 0) return { ops: [], armIds: [] };
-  const order = orderAfterStep(model, afterStepId);
+  const parent = parentId ? model.branches.find((b) => b.id === parentId) : undefined;
+  if (used.length === 0 || (parentId && (!parent || !canNestIn(model, parentId)))) return { ops: [], armIds: [] };
+  const order =
+    afterStepId === null && parent ? (orderInArm(model, parent.id) ?? endOrder(model)) : orderAfterStep(model, afterStepId, parentId);
   const groupId = nextId("G", model.branches.map((b) => b.groupId));
   const ids = model.branches.map((b) => b.id);
   const arms: Branch[] = used.map((condition, index) => {
     const id = nextId("B", ids);
     ids.push(id);
-    return { id, kind, condition, groupId, index, order };
+    return { id, kind, condition, groupId, index, order, ...(parent ? { parentId: parent.id } : {}) };
   });
   return { ops: arms.map((branch) => ({ op: "branch.add", branch })), armIds: arms.map((b) => b.id) };
 }
@@ -150,28 +208,34 @@ export function addEmptyArmOps(model: FlowModel, groupId: string, condition: str
     groupId,
     index: Math.max(...arms.map((b) => b.index)) + 1,
     ...(order !== undefined ? { order } : {}),
+    // 同じ枠の場合は、同じ外側の枠の中にいる
+    ...(arms[0].parentId ? { parentId: arms[0].parentId } : {}),
   };
   return [{ op: "branch.add", branch }];
 }
 
+/** 場合に中身（ステップ・内側の枠）があるか */
+export function armHasContent(model: FlowModel, armId: string): boolean {
+  return armPositions(model, visibleSteps(model), armId).length > 0 || model.branches.some((b) => b.parentId === armId);
+}
+
 /**
- * ステップを枠の外に出す。枠の先頭か末尾ならその場で外し、途中なら枠の直後へ動かす
- * （途中で外すと、枠が 2 つに割れるため）。
+ * ステップを、いまいる枠の 1 つ外に出す（外側の枠の場合へ。いちばん外の枠なら枠の外へ）。
+ * 枠の中身の先頭か末尾ならその場で外し、途中なら枠の直後へ動かす（途中で外すと、枠が 2 つに割れるため）。
  */
 export function leaveBranchOps(model: FlowModel, stepId: StepId): ModelOp[] {
   const steps = visibleSteps(model);
   const step = steps.find((s) => s.id === stepId);
   const branch = step?.branchId ? model.branches.find((b) => b.id === step.branchId) : undefined;
   if (!step || !branch) return [];
-  const groupOf = new Map(model.branches.map((b) => [b.id, b.groupId]));
-  const inGroup = (s: Step) => s.branchId !== null && groupOf.get(s.branchId) === branch.groupId;
-  const first = steps.findIndex(inGroup);
-  const last = steps.findLastIndex(inGroup);
-  const i = steps.indexOf(step);
-  const patch: Extract<ModelOp, { op: "step.update" }>["patch"] = { branchId: null };
-  if (i !== first && i !== last) {
-    const rest = steps.filter((s) => s.id !== stepId);
-    patch.order = orderAt(rest, last, step.order); // last は step を抜くと 1 つ前にずれる＝枠の直後
+  const parent = branch.parentId && model.branches.some((b) => b.id === branch.parentId) ? branch.parentId : null;
+  const rest = steps.filter((s) => s.id !== stepId);
+  const others = groupPositions(model, rest, branch.groupId);
+  const patch: Extract<ModelOp, { op: "step.update" }>["patch"] = { branchId: parent };
+  const inMiddle = others.some((o) => o < step.order) && others.some((o) => o > step.order);
+  if (inMiddle) {
+    const last = Math.max(...others);
+    patch.order = between(last, nextOrderAfter(model, rest, last));
   }
   // 場合が空になっても枠は残す（空になった位置は reducer が覚える）
   return [{ op: "step.update", id: stepId, patch }];
@@ -179,11 +243,12 @@ export function leaveBranchOps(model: FlowModel, stepId: StepId): ModelOp[] {
 
 /**
  * 作ってあるステップを、場合（branchId）に入れる。ほかの枠・場合からの移し替えもこれ。
- * - 枠にほかのステップがあれば、その場合の最後へ動かす（枠の中身が連続したままになるように）
+ * - 枠に中身があれば、その場合の最後へ動かす（枠の中身が連続したままになるように）
  * - 枠がまるごと空なら、place で決める
  *   - "step"（編集パネルから）: ステップは動かさず、枠のほうがステップの位置に来る。先に枠を作って、
  *     あとから既存のステップを入れるときに、手順が枠を作った場所（図の最後など）へ飛んでいかないように。
- *     ただしステップが別の枠の中にいるなら、その枠の直後に出す（途中に残すと、元の枠が 2 つに割れるため）
+ *     ただし枠を囲む場合の外にいるステップや、別の枠の中のステップは、枠を割らない位置へ動かす
+ *     （外側の枠の外へ空の枠を連れ出さない・元の枠を 2 つに割らないため）
  *   - "frame"（図の上で枠へドラッグ）: 落とした場所に入れたいので、ステップのほうを枠の位置へ動かす
  */
 export function enterBranchOps(
@@ -196,15 +261,13 @@ export function enterBranchOps(
   const branch = model.branches.find((b) => b.id === branchId);
   if (!step || !branch || step.branchId === branchId) return [];
   const rest: FlowModel = { ...model, steps: model.steps.filter((s) => s.id !== stepId) };
-  const arms = groupArms(model, branch.groupId);
-  const frameEmpty = !visibleSteps(rest).some((s) => arms.some((b) => b.id === s.branchId));
-  const fromGroup = step.branchId ? model.branches.find((b) => b.id === step.branchId)?.groupId : undefined;
-  const order =
-    !frameEmpty || place === "frame"
-      ? orderInArm(rest, branchId)
-      : fromGroup !== undefined && fromGroup !== branch.groupId
-        ? orderAfterStep(model, stepId)
-        : step.order;
+  const frameEmpty = groupPositions(rest, visibleSteps(rest), branch.groupId).length === 0;
+  const container = branch.parentId ?? null;
+  let order: number | undefined;
+  if (!frameEmpty || place === "frame") order = orderInArm(rest, branchId);
+  else if (step.branchId === container) order = step.order;
+  else if (container === null) order = orderAfterStep(model, stepId, null);
+  else order = orderInArm(rest, branchId);
   if (order === undefined) return [];
   return [{ op: "step.update", id: stepId, patch: order === step.order ? { branchId } : { branchId, order } }];
 }
@@ -235,8 +298,8 @@ export function armConditionPrefix(model: FlowModel, groupId: string): string {
 
 /**
  * 場合分けの場合の順番を入れ替える（dir: -1 = 上へ、1 = 下へ）。隣の場合と index を入れ替え、
- * 中のステップも新しい順番で並べ直す。枠の中で使っていた order の値をそのまま配り直すので、
- * 枠の外のステップは動かない。
+ * 中身（内側の枠の中のステップ・中身の無い内側の枠）も新しい順番で並べ直す。枠の中で使っていた order の値を
+ * そのまま配り直すので、枠の外のステップは動かない。
  */
 export function moveArmOps(model: FlowModel, branchId: string, dir: -1 | 1): ModelOp[] {
   const branch = model.branches.find((b) => b.id === branchId);
@@ -246,15 +309,28 @@ export function moveArmOps(model: FlowModel, branchId: string, dir: -1 | 1): Mod
   const other = arms[i + dir];
   if (!other) return [];
   const swapped = arms.map((b) => (b.id === branch.id ? other : b.id === other.id ? branch : b));
-  const steps = visibleSteps(model).filter((s) => arms.some((b) => b.id === s.branchId));
-  const orders = steps.map((s) => s.order);
-  const reordered = swapped.flatMap((b) => steps.filter((s) => s.branchId === b.id));
+  const steps = visibleSteps(model);
+  const index = branchIndex(model);
+  const empties = emptyFrames(model, steps);
+  /** 場合の中身。ステップか、中身の無い内側の枠 */
+  type Entry = { order: number; step?: string; frame?: Branch[] };
+  const entriesOf = (armId: string): Entry[] =>
+    [
+      ...steps.filter((s) => isUnderArm(index, s, armId)).map((s) => ({ order: s.order, step: s.id })),
+      ...empties
+        .filter((g) => g[0].order !== undefined && chainHasArm(armChain(index, g[0].parentId), armId))
+        .map((g) => ({ order: g[0].order!, frame: g })),
+    ].sort((a, b) => a.order - b.order);
+  const orders = arms.flatMap((b) => entriesOf(b.id).map((e) => e.order)).sort((a, b) => a - b);
+  const reordered = swapped.flatMap((b) => entriesOf(b.id));
   const ops: ModelOp[] = [
     { op: "branch.update", id: branch.id, patch: { index: other.index } },
     { op: "branch.update", id: other.id, patch: { index: branch.index } },
   ];
-  reordered.forEach((s, k) => {
-    if (s.order !== orders[k]) ops.push({ op: "step.update", id: s.id, patch: { order: orders[k] } });
+  reordered.forEach((e, k) => {
+    if (e.order === orders[k]) return;
+    if (e.step) ops.push({ op: "step.update", id: e.step, patch: { order: orders[k] } });
+    for (const b of e.frame ?? []) ops.push({ op: "branch.update", id: b.id, patch: { order: orders[k] } });
   });
   return ops;
 }

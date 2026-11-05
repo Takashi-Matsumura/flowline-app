@@ -1,8 +1,9 @@
 import { extractJson } from "@/lib/json";
 import { chatCompletion } from "@/lib/llm";
+import { branchIndex } from "@/lib/model/frames";
 import type { Branch, FlowModel } from "@/lib/model/types";
 import { loadPrompt } from "@/lib/prompts";
-import { flowItems } from "@/lib/render/mermaid";
+import { flowItems, itemChain } from "@/lib/render/mermaid";
 import type { Finding, FindingCategory, Severity } from "./rules";
 
 /**
@@ -72,13 +73,22 @@ export type AiReview = { findings: Finding[]; summary: string | null; expected: 
 export async function reviewWithAi(model: FlowModel, title: string, already: string[]): Promise<AiReview> {
   const nameOf = (id: string) => model.actors.find((a) => a.id === id)?.name ?? id;
   const flow = flowItems(model);
-  const items = flow.flatMap(({ step, branch }, i) => {
+  const index = branchIndex(model);
+  const items = flow.flatMap((item, i) => {
+    const { step } = item;
     if (!step) return [];
-    // 枠のすぐ後の手順（枠の外か、続く別の枠の中）は、枠のすべての場合の合流点。小さなモデルは構造を読み違えるので、明示する
+    // 枠のすぐ後の手順（枠の外か、続く別の枠の中）は、枠のすべての場合の合流点。小さなモデルは構造を読み違えるので、明示する。
+    // 入れ子の枠をまとめて出たなら、内側の枠から順に書く
     const prev = flow[i - 1];
-    const merge =
-      prev?.branch && prev.branch.groupId !== branch?.groupId ? mergeNote(model, prev.branch.groupId) : undefined;
-    return [{ step, branch, merge }];
+    const before = prev ? itemChain(index, prev) : [];
+    const chain = itemChain(index, item);
+    let c = 0;
+    while (c < before.length && c < chain.length && before[c].id === chain[c].id) c += 1;
+    // 同じ枠の別の場合へ移っただけなら、その枠は出ていない
+    if (before[c] && chain[c] && before[c].groupId === chain[c].groupId) c += 1;
+    const left = before.slice(c).reverse();
+    const merge = left.length > 0 ? left.map((b) => mergeNote(model, b.groupId)).join("。") : undefined;
+    return [{ step, branch: chain, merge }];
   });
   const name = title || model.scope.title;
   // 業務名だけの問いは、点検の本体と並べて投げる（llama-server は 2 つまで同時に処理できる）
@@ -104,7 +114,7 @@ export async function reviewWithAi(model: FlowModel, title: string, already: str
       kind: s.kind,
       ...(s.artifact ? { artifact: s.artifact } : {}),
       ...(s.assignee ? { assignee: s.assignee } : {}),
-      ...(branch ? { when: whenNote(branch) } : {}),
+      ...(branch.length > 0 ? { when: whenChain(branch) } : {}),
       ...(merge ? { merge } : {}),
     })),
     already,
@@ -176,6 +186,11 @@ function whenNote(b: Branch): string {
   if (b.kind === "loop") return `${c}の間くり返す（当てはまらなければ一度も行わない）`;
   if (b.kind === "opt") return `${c}のときだけ行う（当てはまらなければ飛ばす）`;
   return `${c}の場合`;
+}
+
+/** 入れ子の枠の中の手順に添える条件。外側の枠から順に */
+export function whenChain(chain: readonly Branch[]): string {
+  return chain.map(whenNote).join("、その中で");
 }
 
 /**

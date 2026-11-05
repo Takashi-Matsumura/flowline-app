@@ -1,8 +1,10 @@
 import { extractJson } from "@/lib/json";
 import { chatCompletion } from "@/lib/llm";
-import type { FlowModel } from "@/lib/model/types";
+import { armChain, branchIndex, isUnderArm } from "@/lib/model/frames";
+import type { Branch, FlowModel } from "@/lib/model/types";
 import { loadPrompt, type PromptName } from "@/lib/prompts";
 import { flowItems } from "@/lib/render/mermaid";
+import { whenChain } from "./ai";
 import { aiFixTarget, buildAiFix, declinedOf, type AiFixTarget, type Fix, type FixableFinding } from "./fix";
 
 /**
@@ -44,7 +46,10 @@ export async function generateAiFix(model: FlowModel, title: string, finding: Fi
 
 function inputFor(model: FlowModel, title: string, target: AiFixTarget): unknown {
   const nameOf = (id: string) => model.actors.find((a) => a.id === id)?.name ?? id;
+  const index = branchIndex(model);
   const items = flowItems(model).flatMap(({ step, branch }) => (step ? [{ step, branch }] : []));
+  /** 入れ子の枠の中なら、外側の枠の条件から順に */
+  const whenOf = (branch: Branch | undefined) => (branch ? whenChain(armChain(index, branch.id)) : undefined);
   const line = (i: number) => {
     const it = items[i];
     return it ? `${nameOf(it.step.from)}→${nameOf(it.step.to)}: ${it.step.label}` : undefined;
@@ -60,7 +65,7 @@ function inputFor(model: FlowModel, title: string, target: AiFixTarget): unknown
         condition: arm.condition,
         rewrite: target.arms.includes(arm),
         steps: items
-          .filter((it) => it.step.branchId === arm.id)
+          .filter((it) => isUnderArm(index, it.step, arm.id))
           .map(({ step }) => `${nameOf(step.from)}→${nameOf(step.to)}: ${step.label}`),
       })),
     };
@@ -78,7 +83,7 @@ function inputFor(model: FlowModel, title: string, target: AiFixTarget): unknown
           label: s.label,
           kind: s.kind,
           ...(s.artifact ? { artifact: s.artifact } : {}),
-          ...(branch ? { when: branch.condition } : {}),
+          ...(branch ? { when: whenOf(branch) } : {}),
           ...(line(i - 1) ? { before: line(i - 1) } : {}),
           ...(line(i + 1) ? { after: line(i + 1) } : {}),
         };
@@ -104,7 +109,7 @@ function inputFor(model: FlowModel, title: string, target: AiFixTarget): unknown
       label: s.label,
       kind: s.kind,
       ...(s.artifact ? { artifact: s.artifact } : {}),
-      ...(branch ? { when: `［${branch.condition}］${branch.kind === "loop" ? "の間くり返す" : "の場合"}` } : {}),
+      ...(branch ? { when: whenOf(branch) } : {}),
       ...(s.status === "provisional" ? { provisional: true } : {}),
     })),
   };

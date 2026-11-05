@@ -1,4 +1,5 @@
-import type { Actor, FlowModel, ModelOp, OpenIssue, Scope, Step } from "./types";
+import { armChain, branchIndex, MAX_FRAME_DEPTH } from "./frames";
+import type { Actor, Branch, FlowModel, ModelOp, OpenIssue, Scope, Step } from "./types";
 
 /**
  * FlowModel を変更する唯一の入口。純関数（時刻は `at` で受け取る）。
@@ -164,7 +165,18 @@ function applyOne(m: FlowModel, op: ModelOp, rev: number): FlowModel | null {
 
     case "branch.add": {
       if (m.branches.some((b) => b.id === op.branch.id)) return null;
-      return { ...m, branches: [...m.branches, op.branch] };
+      const { parentId, ...rest } = op.branch;
+      // 同じ枠の場合は、同じ外側の枠の中に置く（先にある場合に揃える）
+      const sibling = m.branches.find((b) => b.groupId === rest.groupId);
+      const parent = sibling ? sibling.parentId : parentId;
+      const branch: Branch = parent ? { ...rest, parentId: parent } : rest;
+      if (parent) {
+        const outer = m.branches.find((b) => b.id === parent);
+        // 無い場合・自分の枠の中・深すぎる入れ子には作らない
+        if (!outer || outer.groupId === rest.groupId) return null;
+        if (armChain(branchIndex(m), parent).length >= MAX_FRAME_DEPTH) return null;
+      }
+      return { ...m, branches: [...m.branches, branch] };
     }
 
     case "branch.update": {
@@ -180,6 +192,7 @@ function applyOne(m: FlowModel, op: ModelOp, rev: number): FlowModel | null {
                 ...(condition !== undefined ? { condition } : {}),
                 ...(op.patch.kind ? { kind: op.patch.kind } : {}),
                 ...(op.patch.index !== undefined ? { index: op.patch.index } : {}),
+                ...(op.patch.order !== undefined && Number.isFinite(op.patch.order) ? { order: op.patch.order } : {}),
               }
             : b,
         ),
@@ -187,12 +200,23 @@ function applyOne(m: FlowModel, op: ModelOp, rev: number): FlowModel | null {
     }
 
     case "branch.remove": {
-      if (!m.branches.some((b) => b.id === op.id)) return null;
+      const target = m.branches.find((b) => b.id === op.id);
+      if (!target) return null;
+      // 中のステップと内側の枠は、1 つ外（外側の枠の場合。いちばん外の枠なら枠の外）へ出す
+      const outer = target.parentId && m.branches.some((b) => b.id === target.parentId) ? target.parentId : null;
       return {
         ...m,
-        branches: m.branches.filter((b) => b.id !== op.id),
-        // 取り消したステップも外す（元に戻したときに、無い枠を指さないように）
-        steps: m.steps.map((s) => (s.branchId === op.id ? { ...s, branchId: null } : s)),
+        branches: m.branches
+          .filter((b) => b.id !== op.id)
+          .map((b) => {
+            if (b.parentId !== op.id) return b;
+            if (outer) return { ...b, parentId: outer };
+            const top = { ...b };
+            delete top.parentId;
+            return top;
+          }),
+        // 取り消したステップも出す（元に戻したときに、無い枠を指さないように）
+        steps: m.steps.map((s) => (s.branchId === op.id ? { ...s, branchId: outer } : s)),
       };
     }
 

@@ -1,3 +1,4 @@
+import { armChain, branchIndex } from "@/lib/model/frames";
 import { notedTargets } from "@/lib/model/notes";
 import type { Actor, FlowModel, OpenIssue, Step } from "@/lib/model/types";
 import { flagSuffix, toMermaid, visibleSteps } from "@/lib/render/mermaid";
@@ -101,7 +102,12 @@ export function buildSummaryMarkdown(
 ): string {
   const nameOf = (id: string) => model.actors.find((a) => a.id === id)?.name ?? id;
   const steps = visibleSteps(model);
-  const branchOf = (id: string | null) => (id ? model.branches.find((b) => b.id === id) : undefined);
+  const index = branchIndex(model);
+  /** ステップの条件。入れ子の枠の中なら、外側の枠の条件から順に（「loop 不備がある ＞ alt 軽微」） */
+  const conditionOf = (id: string | null) =>
+    armChain(index, id)
+      .map((b) => `${b.kind} ${b.condition}`)
+      .join(" ＞ ");
   const trigger = model.actors.find((a) => a.role === "trigger");
   const end = model.actors.find((a) => a.role === "end");
   const draft = (opts.warnings?.length ?? 0) > 0;
@@ -287,7 +293,6 @@ export function buildSummaryMarkdown(
       ...table(
         ["#", "送り手", "担当", "受け手", "内容", "種別", "条件", "渡すもの", "承認者", "状態"],
         steps.map((s, i) => {
-          const b = branchOf(s.branchId);
           return [
             String(i + 1),
             cell(nameOf(s.from)),
@@ -295,7 +300,7 @@ export function buildSummaryMarkdown(
             cell(nameOf(s.to)),
             cell(s.label + flagSuffix(s)),
             MESSAGE_LABEL[s.kind],
-            cell(b ? `${b.kind} ${b.condition}` : ""),
+            cell(conditionOf(s.branchId)),
             cell(s.artifact ?? ""),
             cell(s.approver ? nameOf(s.approver) : ""),
             s.status === "provisional" ? "**仮**" : "",

@@ -1,3 +1,4 @@
+import { armChain, branchIndex } from "@/lib/model/frames";
 import type { Branch, FlowModel } from "@/lib/model/types";
 import { dropCondition, type Narration } from "@/lib/preview/scenes";
 import { flowItems } from "@/lib/render/mermaid";
@@ -6,6 +7,7 @@ import { flowItems } from "@/lib/render/mermaid";
  * 業務分掌の「業務の流れ」: 業務の開始から終了までを、まとまり（ブロック）ごとの箇条書きにする。純関数。
  *
  * 枠（分岐の各場合・条件付き・くり返し）と、その前後の枠の外の手順を 1 つずつのまとまりにし、
+ * （入れ子の枠は、いちばん内側の場合ごとに。見出しは外側の枠からつなぐ）
  * 中の手順を「（番号）文」の箇条書きで並べる。番号は図・ステップ一覧と同じ。
  * 手順の文は AI の言い回し（フローの再生と同じ lib/preview/narrate.ts）が届いていればそれを、無ければコードで作った文を使う。
  */
@@ -36,25 +38,27 @@ export function flowText(
 ): FlowText {
   const nameOf = (id: string) => model.actors.find((a) => a.id === id)?.name ?? "（不明）";
   const blocks: FlowBlock[] = [];
+  const index = branchIndex(model);
   let armId: string | null | undefined; // undefined = まだまとまりが無い / null = 枠の外
-  let afterKind: Branch["kind"] | null = null;
   let n = 0;
 
   for (const { step, branch } of flowItems(model)) {
     const id = branch?.id ?? null;
     if (id !== armId) {
-      const title = branch
-        ? frameTitle(branch)
-        : armId === undefined
-          ? "開始"
-          : afterKind === "alt"
-            ? "合流後"
-            : afterKind === "loop"
-              ? "くり返しの後"
-              : "その後";
+      const chain = armChain(index, id);
+      const before = armChain(index, armId);
+      // 内側の枠を出て、外側の場合（か枠の外）へ戻った: 出た枠の種類で「合流後」などを添える
+      const back = armId !== undefined && chain.length < before.length && chain.every((b, i) => before[i].id === b.id);
+      const left = back ? before[chain.length] : undefined;
+      const after = left ? (left.kind === "alt" ? "合流後" : left.kind === "loop" ? "くり返しの後" : "その後") : null;
+      const title =
+        chain.length > 0
+          ? chain.map(frameTitle).join(" ＞ ") + (after ? `（${after}）` : "")
+          : armId === undefined
+            ? "開始"
+            : (after ?? "その後");
       blocks.push({ title, name: names?.[blocks.length] ?? null, items: [], stepIds: [] });
       armId = id;
-      if (branch) afterKind = branch.kind;
     }
     const block = blocks[blocks.length - 1];
     const items = block.items;

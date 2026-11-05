@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { artifactField, FromToPicker, PanelSection } from "./step-panel";
 import type { StepInput } from "@/lib/model/add-step";
+import { armHasContent } from "@/lib/model/branch";
 import type { Branch, FlowModel } from "@/lib/model/types";
 import { visibleSteps } from "@/lib/render/mermaid";
 
@@ -56,7 +57,8 @@ export function StepAddPanel({
   // 足したときの図の番号。分岐の中に足すときは、場合の中の位置で決まるので出さない
   const number = into ? undefined : afterIndex >= 0 ? afterIndex + 2 : steps.length + 1;
   // 空の場合なら、やめられるようにする（枠の最後の場合なら、枠ごと消える）
-  const intoEmpty = into !== undefined && !steps.some((s) => s.branchId === into.id);
+  // 内側の枠があれば中身があるとみなす（消すと内側の枠が外へ出て、外側の枠が割れるため）
+  const intoEmpty = into !== undefined && !armHasContent(model, into.id);
   const lastArm = into !== undefined && model.branches.filter((b) => b.groupId === into.groupId).length === 1;
   const ready = label.trim() !== "" && from !== "" && to !== "";
   const submit = (again: boolean) => {

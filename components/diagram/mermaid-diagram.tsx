@@ -360,10 +360,11 @@ function dropAt(host: HTMLElement, clientY: number): { insertAt: number; lineY: 
 /**
  * 点 y（画面座標）のある枠と場合。枠は図の上から何番目か（.labelBox の順 = drawnFrames の順）、
  * 場合は枠の中の点線の区切り（else）より下にいくつあるか。条件の文字（枠の見出しか else の条件）と、枠の囲みも返す。
- * どの枠の外なら null
+ * 入れ子の枠なら、いちばん内側の枠（上から順に並べた枠の、最後に当たったもの）。どの枠の外なら null
  */
 function frameAt(host: HTMLElement, y: number): { frame: number; arm: number; condition: string; rect: DOMRect } | null {
   const frames = [...host.querySelectorAll(".labelBox")].map((el) => el.closest('g[data-et="control-structure"]'));
+  let found: { frame: number; arm: number; condition: string; rect: DOMRect } | null = null;
   for (const [frame, g] of frames.entries()) {
     if (!g) continue;
     const rect = g.getBoundingClientRect();
@@ -372,9 +373,9 @@ function frameAt(host: HTMLElement, y: number): { frame: number; arm: number; co
     const sections = [...g.querySelectorAll(":scope > line.loopLine")].slice(4);
     const arm = sections.filter((line) => line.getBoundingClientRect().top < y).length;
     const label = arm === 0 ? g.querySelector(".loopText") : g.querySelectorAll(".sectionTitle")[arm - 1];
-    return { frame, arm, condition: label?.textContent?.trim() ?? "", rect };
+    found = { frame, arm, condition: label?.textContent?.trim() ?? "", rect };
   }
-  return null;
+  return found;
 }
 
 /** すべての枠の囲み（画面座標）。枠の外に落とす横線を、枠にかからない位置へずらすのに使う */
@@ -559,7 +560,29 @@ function reshapeSelfLoop(arrow: Element | null, cx: number, cy: number) {
 }
 
 /**
- * Mermaid の SVG を、Mermaid の書き方では出せない見た目に整える（登場人物の 2 段目・中心の強調）。
+ * 枠（alt / opt / loop）の要素を、図の上から順に並べ直す。Mermaid は枠を閉じるときに描くので、入れ子の枠は
+ * 内側が先に SVG に入る。画面の操作（枠の見出しの何番目か = drawnFrames の順）は上から順で数えるので、
+ * 枠の上端（同じなら外側 = 左端の小さいほう）の順に、同じ親の中で並べ直す。重なりは内側が上に描かれる。変えたら true
+ */
+function orderFrames(doc: Document): boolean {
+  const frames = [...doc.querySelectorAll('g[data-et="control-structure"]')];
+  if (frames.length < 2) return false;
+  const top = (g: Element) => {
+    const line = g.querySelector(":scope > line.loopLine");
+    return { y: Number(line?.getAttribute("y1") ?? 0), x: Number(line?.getAttribute("x1") ?? 0) };
+  };
+  const sorted = [...frames].sort((a, b) => top(a).y - top(b).y || top(a).x - top(b).x);
+  if (sorted.every((g, i) => g === frames[i])) return false;
+  // 並べ直す前の、最初の枠の位置に差し込む（ほかの要素との前後は変えない）
+  const anchor = doc.createComment("frames");
+  frames[0].before(anchor);
+  for (const g of sorted) anchor.before(g);
+  anchor.remove();
+  return true;
+}
+
+/**
+ * Mermaid の SVG を、Mermaid の書き方では出せない見た目に整える（登場人物の 2 段目・中心の強調・枠の順番）。
  * 描くときに 1 回だけ直すので、画面にも、書き出す .svg にも同じように効く。読めなければ元のまま
  */
 function polishSvg(svg: string, code: string): string {
@@ -571,10 +594,11 @@ function polishSvg(svg: string, code: string): string {
     .trim();
   const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
   if (doc.querySelector("parsererror")) return svg;
+  const ordered = orderFrames(doc);
   const dotted = enlargeStepDots(doc);
   const spaced = spaceActorLines(doc);
   const focused = focus !== undefined && /^\w+$/.test(focus) && markFocus(doc, focus);
-  return dotted || spaced || focused ? new XMLSerializer().serializeToString(doc.documentElement) : svg;
+  return ordered || dotted || spaced || focused ? new XMLSerializer().serializeToString(doc.documentElement) : svg;
 }
 
 /** Mermaid で描き、見た目を整える */
