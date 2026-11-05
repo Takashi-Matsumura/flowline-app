@@ -68,7 +68,7 @@ http://localhost:3000 を開きます。
 
 枠に貼った付箋（くり返しを見直す基準、「近い」の判断基準）と、手順に貼った付箋も入っています。
 
-一覧画面のサムネイルから再生する動画は、`public/videos/` に置きます（`01-overview` と `02-drawing` の `.mp4` / `.jpg` / `.vtt`）。動画に音声はなく、アプリの再生ダイアログでは字幕（`.vtt`）を VOICEVOX で読み上げます。サイズが大きいので git には入れていません。Docker イメージにはビルド時に取り込まれるので、差し替えたらイメージを作り直してください。一覧は `components/ui/tutorial-videos.tsx` にあります。
+一覧画面のサムネイルから再生する動画は、`public/videos/` に置きます（`01-overview`・`02-drawing`・`03-nesting` の `.mp4` / `.jpg` / `.vtt`）。動画に音声はなく、アプリの再生ダイアログでは字幕（`.vtt`）を VOICEVOX で読み上げます。サイズが大きいので git には入れていません。Docker イメージにはビルド時に取り込まれるので、差し替えたらイメージを作り直してください。一覧は `components/ui/tutorial-videos.tsx` にあります。
 
 ## ディレクトリ構成
 
