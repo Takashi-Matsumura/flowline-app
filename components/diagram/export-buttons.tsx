@@ -5,6 +5,7 @@ import { download } from "./download";
 import { notedTargets } from "@/lib/model/notes";
 import type { FlowModel } from "@/lib/model/types";
 import { toDrawio } from "@/lib/render/drawio";
+import { toFlowExport } from "@/lib/store/import";
 import { addNotesToSvg } from "@/lib/render/svg-notes";
 import { DisclosureIcon } from "@/components/ui/disclosure-icon";
 import { toSvg11 } from "./svg11";
@@ -28,6 +29,11 @@ type Props = {
 };
 
 const BUTTONS: { format: ExportFormat; label: string; hint: string }[] = [
+  {
+    format: "json",
+    label: ".json（図のデータ）",
+    hint: "図のデータそのもの。一覧の「ファイルから読み込む」で、別の環境でも同じ図を作れます（バックアップ・受け渡し用）",
+  },
   { format: "drawio", label: ".drawio", hint: "draw.io（diagrams.net）で開いて編集できます" },
   { format: "mmd", label: ".mmd", hint: "Mermaid のコード。GitHub や Obsidian でそのまま描画できます" },
   { format: "svg", label: ".svg", hint: "画像として使えます（画面に描画された図そのもの。畳んだ枠は開いて書き出します）" },
@@ -41,7 +47,7 @@ const BUTTONS: { format: ExportFormat; label: string; hint: string }[] = [
 const TRIGGER_BTN =
   "flex cursor-pointer list-none items-center gap-1.5 rounded-md border border-black/15 px-2.5 py-1 text-sm hover:bg-black/5 [&::-webkit-details-marker]:hidden dark:border-white/20 dark:hover:bg-white/10";
 
-/** 図の書き出し（.drawio / .mmd / .svg）。「書き出し ▾」の下に3形式を畳む。 */
+/** 図の書き出し（.json / .drawio / .mmd / .svg）。「書き出し ▾」の下に畳む。 */
 export function ExportButtons({ model, mermaidCode, svg, empty }: Props) {
   const [message, setMessage] = useState<string | null>(null);
   // 付箋（手順・枠・登場人物に貼った、チームで決めること）を .svg に入れるか。付箋がある図では、既定で入れる
@@ -53,7 +59,8 @@ export function ExportButtons({ model, mermaidCode, svg, empty }: Props) {
     try {
       const name = exportFileName(model.scope.title, format);
       const image = svg && withNotes && noteCount > 0 ? addNotesToSvg(svg, model) : svg;
-      if (format === "drawio") download(name, EXPORT_MIME.drawio, toDrawio(model));
+      if (format === "json") download(name, EXPORT_MIME.json, toFlowExport(model));
+      else if (format === "drawio") download(name, EXPORT_MIME.drawio, toDrawio(model));
       else if (format === "mmd") download(name, EXPORT_MIME.mmd, `${mermaidCode}\n`);
       else if (format === "svg11" && image) download(name, EXPORT_MIME.svg11, toSvg11(image));
       else if (image) download(name, EXPORT_MIME.svg, finalizeSvg(image));

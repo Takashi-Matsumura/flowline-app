@@ -229,6 +229,15 @@ function toIssues(raw: unknown[], stepIds: Set<string>, groupIds: Set<string>, a
   });
 }
 
+/**
+ * 図を、読み込み直せるファイル（`grilljev-flow` 形式）の中身にする。parseFlowExport の逆。
+ * 一覧の「ファイルから読み込む」で、別の環境・別の人のところに同じ図を作れる。
+ * 畳んでいる枠など、見え方だけの状態は入れない（図の中身だけ）。
+ */
+export function toFlowExport(model: FlowModel, now: Date = new Date()): string {
+  return `${JSON.stringify({ format: IMPORT_FORMAT, version: 1, exportedAt: now.toISOString(), model }, null, 2)}\n`;
+}
+
 /** 書き出したファイルの中身（JSON を parse したもの）を、保存できるモデルにする。 */
 export function parseFlowExport(value: unknown, at: string): ImportResult {
   try {
