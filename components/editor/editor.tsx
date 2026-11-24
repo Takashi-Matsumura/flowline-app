@@ -348,20 +348,19 @@ export function Editor({
           <BranchIcon />
           分岐を追加
         </button>
-        <span className="mx-1 h-6 w-px bg-black/10 dark:bg-white/15" aria-hidden />
-        <IconButton label="元に戻す（⌘Z）" tip="below" tipAlign="left" disabled={history.past.length === 0} onClick={undo}>
+        <span className="mx-1 hidden h-6 w-px bg-black/10 sm:block dark:bg-white/15" aria-hidden />
+        <IconButton label="元に戻す（⌘Z）" tip="below" disabled={history.past.length === 0} onClick={undo}>
           <UndoIcon />
         </IconButton>
         <IconButton
           label="やり直し（⇧⌘Z）"
           tip="below"
-          tipAlign="left"
           disabled={history.future.length === 0}
           onClick={redo}
         >
           <RedoIcon />
         </IconButton>
-        <span className="mx-1 h-6 w-px bg-black/10 dark:bg-white/15" aria-hidden />
+        <span className="mx-1 hidden h-6 w-px bg-black/10 sm:block dark:bg-white/15" aria-hidden />
         <button
           type="button"
           className={outlineBtn}
