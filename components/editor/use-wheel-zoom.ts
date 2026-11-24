@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3;
@@ -8,6 +8,8 @@ const MAX_ZOOM = 3;
 const SPEED = 0.002;
 /** 100% の近くは 100%（幅に合わせる）に吸い付かせる。小さい図を拡大しない状態に戻れるように */
 const SNAP = 0.04;
+/** 「全体を表示」で縮める下限。ホイールの下限より小さくできる（長いフローを 1 画面に収めるため） */
+const MIN_FIT_ZOOM = 0.2;
 
 /** Space + ドラッグで動かし始めたときの、ポインタとスクロールの位置 */
 type Pan = { pointerId: number; x: number; y: number; left: number; top: number };
@@ -130,7 +132,8 @@ export function useWheelZoom() {
         height: el.scrollHeight,
       };
       setZoom((z) => {
-        const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z * Math.exp(-delta * SPEED)));
+        // 「全体を表示」で下限より小さくしていたら、そこから動かす（下限まで一気に跳ばない）
+        const next = Math.min(MAX_ZOOM, Math.max(Math.min(MIN_ZOOM, z), z * Math.exp(-delta * SPEED)));
         return Math.abs(next - 1) < SNAP ? 1 : Math.round(next * 100) / 100;
       });
     };
@@ -148,5 +151,22 @@ export function useWheelZoom() {
     el.scrollTo({ left: (a.left + a.x) * rx - a.x, top: (a.top + a.y) * ry - a.y });
   }, [el, zoom]);
 
-  return { zoom, setZoom, containerRef: setEl, hand };
+  /**
+   * 図の全体（高さも）が表示領域に収まる倍率にする。幅に合わせて（100%）収まるなら 100%。
+   * 倍率は幅に対する比なので、図の縦横比と表示領域の大きさから求める。
+   */
+  const fitAll = useCallback(() => {
+    const svg = el?.querySelector("svg");
+    const box = svg?.viewBox.baseVal;
+    if (!el || !box || box.width === 0 || box.height === 0) return;
+    const style = getComputedStyle(el);
+    const width = el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+    const height = el.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+    if (width <= 0 || height <= 0) return;
+    const fit = (height * box.width) / (width * box.height);
+    setZoom(fit >= 1 - SNAP ? 1 : Math.max(MIN_FIT_ZOOM, Math.floor(fit * 100) / 100));
+    el.scrollTo({ left: 0, top: 0 });
+  }, [el]);
+
+  return { zoom, setZoom, fitAll, containerRef: setEl, hand };
 }

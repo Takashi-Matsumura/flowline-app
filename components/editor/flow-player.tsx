@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MermaidDiagram } from "@/components/diagram/mermaid-diagram";
-import type { FlowModel } from "@/lib/model/types";
+import type { FlowModel, ModelOp } from "@/lib/model/types";
+import { addNoteOp, MAX_NOTE_CHARS, notesOf } from "@/lib/model/notes";
 import { buildScenes, narrate, speechOf, type Narration, type Scene } from "@/lib/preview/scenes";
 import { toMermaid } from "@/lib/render/mermaid";
 import { fetchVoices, useVoiceChoice, VoiceSelect, type Tts } from "@/components/ui/voice";
@@ -28,6 +29,36 @@ const SPEEDS = [
   { value: 1.6, label: "はやい", voice: 1.3 },
 ] as const;
 
+/** 字幕の文字の大きさ。外部ディスプレイに映して、離れた席から読むときに大きくする */
+const CAPTION_SIZES = [
+  { value: "normal", label: "標準", className: "text-xl sm:text-2xl" },
+  { value: "large", label: "大", className: "text-3xl sm:text-4xl" },
+  { value: "xlarge", label: "特大", className: "text-4xl sm:text-6xl" },
+] as const;
+type CaptionSize = (typeof CAPTION_SIZES)[number]["value"];
+const CAPTION_SIZE_KEY = "flowline.captionSize";
+
+/** 選んだ字幕の大きさ。この端末のブラウザに覚えておく（図のデータには入れない） */
+function useCaptionSize(): [CaptionSize, (v: CaptionSize) => void] {
+  const [size, setSize] = useState<CaptionSize>(() => {
+    try {
+      const saved = window.localStorage.getItem(CAPTION_SIZE_KEY);
+      return CAPTION_SIZES.find((c) => c.value === saved)?.value ?? "normal";
+    } catch {
+      return "normal";
+    }
+  });
+  function choose(v: CaptionSize) {
+    setSize(v);
+    try {
+      window.localStorage.setItem(CAPTION_SIZE_KEY, v);
+    } catch {
+      // 保存できなくても、この画面の間は選んだ大きさで出す
+    }
+  }
+  return [size, choose];
+}
+
 type Ai = { status: "loading" } | { status: "ready"; narration: Narration } | { status: "error"; message: string };
 
 async function errorOf(res: Response): Promise<string> {
@@ -45,10 +76,24 @@ async function errorOf(res: Response): Promise<string> {
  * 読み上げ（VOICEVOX、/api/tts）が使えるときは、字幕を読み終えてから次の場面へ進む。
  * 使えないとき・切ったときは、字幕の長さから決めた時間で進む。
  */
-export function FlowPlayer({ name, model, onClose }: { name: string; model: FlowModel; onClose: () => void }) {
+export function FlowPlayer({
+  name,
+  model,
+  onCommit,
+  onClose,
+}: {
+  name: string;
+  model: FlowModel;
+  /** 再生中に貼った付箋を図に反映する */
+  onCommit: (ops: ModelOp[]) => void;
+  onClose: () => void;
+}) {
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const code = useMemo(() => toMermaid(model), [model]);
-  const base = useMemo(() => buildScenes(model, name), [model, name]);
+  // 場面は開いたときの図で作る。再生中に付箋を貼ると model が変わるが、それで場面や AI の言い回しを作り直さない
+  // （付箋は場面に出ない）。付箋の一覧と、貼るときの id は今の model から取る
+  const [flow] = useState(model);
+  const code = useMemo(() => toMermaid(flow), [flow]);
+  const base = useMemo(() => buildScenes(flow, name), [flow, name]);
   const [ai, setAi] = useState<Ai>({ status: "loading" });
   const [useAi, setUseAi] = useState(true);
   const scenes = useMemo(
@@ -67,6 +112,29 @@ export function FlowPlayer({ name, model, onClose }: { name: string; model: Flow
   const audioCache = useRef(new Map<string, Promise<string>>());
   const last = scenes.length - 1;
   const scene = scenes[Math.min(index, last)];
+  const [captionSize, setCaptionSize] = useCaptionSize();
+  // 付箋を貼れるのはステップの場面だけ（Scene.key がステップの id）
+  const stepId = scene.kind === "step" ? scene.key : undefined;
+  const stepNotes = stepId ? notesOf(model, stepId) : [];
+  /** 付箋を書いている場面のステップ。場面が移ったら書く欄は閉じる */
+  const [noting, setNoting] = useState<string | null>(null);
+  const [noteText, setNoteText] = useState("");
+  const notingHere = noting !== null && noting === stepId;
+
+  function startNote() {
+    if (!stepId) return;
+    // 書いている間に次の場面へ進まないよう止める
+    setPlaying(false);
+    setNoting(stepId);
+  }
+  function addNote() {
+    if (!stepId) return;
+    const op = addNoteOp(model, noteText, { kind: "step", id: stepId });
+    if (!op) return;
+    onCommit([op]);
+    setNoteText("");
+    setNoting(null);
+  }
 
   useEffect(() => {
     dialogRef.current?.showModal();
@@ -77,7 +145,7 @@ export function FlowPlayer({ name, model, onClose }: { name: string; model: Flow
     fetch("/api/narrate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model, title: name }),
+      body: JSON.stringify({ model: flow, title: name }),
       signal: ctrl.signal,
     })
       .then(async (res) => {
@@ -92,7 +160,7 @@ export function FlowPlayer({ name, model, onClose }: { name: string; model: Flow
         if (!ctrl.signal.aborted) setAi({ status: "error", message: e instanceof Error ? e.message : "通信に失敗しました" });
       });
     return () => ctrl.abort();
-  }, [model, name]);
+  }, [flow, name]);
 
   // 読み上げの声のクレジット。取れたら読み上げが使える
   useEffect(() => {
@@ -204,7 +272,8 @@ export function FlowPlayer({ name, model, onClose }: { name: string; model: Flow
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.isComposing || (e.target as HTMLElement | null)?.tagName === "SELECT") return;
+      // 付箋を書いている欄や選択肢の上では、キーをそのまま使う
+      if (e.isComposing || /^(SELECT|INPUT|TEXTAREA)$/.test((e.target as HTMLElement | null)?.tagName ?? "")) return;
       if (e.key === " ") togglePlay();
       else if (e.key === "ArrowRight") go(index + 1);
       else if (e.key === "ArrowLeft") go(index - 1);
@@ -227,7 +296,9 @@ export function FlowPlayer({ name, model, onClose }: { name: string; model: Flow
       // Esc で閉じる（dialog の標準動作を、親の状態に揃える）
       onCancel={(e) => {
         e.preventDefault();
-        onClose();
+        // 付箋を書いている途中の Esc は、書く欄だけ閉じる
+        if (notingHere) setNoting(null);
+        else onClose();
       }}
       className="m-0 h-dvh max-h-none w-dvw max-w-none bg-background p-0 text-foreground backdrop:bg-black/50"
     >
@@ -291,7 +362,9 @@ export function FlowPlayer({ name, model, onClose }: { name: string; model: Flow
                 </span>
               ))}
             </div>
-            <p className="mt-2 text-xl leading-relaxed sm:text-2xl">{scene.caption}</p>
+            <p className={`mt-2 leading-relaxed ${CAPTION_SIZES.find((c) => c.value === captionSize)?.className}`}>
+              {scene.caption}
+            </p>
             <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-zinc-600 dark:text-zinc-400">
               {scene.artifact && (
                 <span className="rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-amber-900 dark:border-amber-400/40 dark:bg-amber-400/10 dark:text-amber-200">
@@ -299,7 +372,40 @@ export function FlowPlayer({ name, model, onClose }: { name: string; model: Flow
                 </span>
               )}
               {narrated && <span>図の表記: {scene.label}</span>}
+              {stepNotes.map((n) => (
+                <span
+                  key={n.id}
+                  className="rounded border border-yellow-300 bg-yellow-50 px-2 py-0.5 text-yellow-900 dark:border-yellow-400/40 dark:bg-yellow-400/10 dark:text-yellow-100"
+                >
+                  付箋: {n.question}
+                  {n.answer ? ` → ${n.answer}` : ""}
+                </span>
+              ))}
             </div>
+            {notingHere && (
+              <div className="mt-2 flex gap-2">
+                <input
+                  autoFocus
+                  value={noteText}
+                  maxLength={MAX_NOTE_CHARS}
+                  placeholder="この手順について、チームで決めること（例: 承認者が不在のときはどうするか）"
+                  aria-label="この手順に貼る付箋"
+                  onChange={(e) => setNoteText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+                    e.preventDefault();
+                    addNote();
+                  }}
+                  className="min-w-0 flex-1 rounded-md border border-black/15 bg-white px-3 py-1.5 text-base dark:border-white/20 dark:bg-zinc-950"
+                />
+                <button type="button" className={btn} disabled={noteText.trim() === ""} onClick={addNote}>
+                  貼る
+                </button>
+                <button type="button" className={btn} onClick={() => setNoting(null)}>
+                  やめる
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -323,7 +429,30 @@ export function FlowPlayer({ name, model, onClose }: { name: string; model: Flow
             <span className="ml-2 text-sm tabular-nums text-zinc-500">
               {index + 1} / {scenes.length}
             </span>
+            <button
+              type="button"
+              className={`${btn} ml-2`}
+              disabled={!stepId || notingHere}
+              title={stepId ? "この手順に付箋を貼ります（再生は止まります）" : "付箋は手順の場面で貼れます"}
+              onClick={startNote}
+            >
+              ＋ この手順に付箋
+            </button>
             <span className="flex-1" />
+            <label className="flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-400">
+              字幕
+              <select
+                value={captionSize}
+                onChange={(e) => setCaptionSize(e.target.value as CaptionSize)}
+                className="rounded-md border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20"
+              >
+                {CAPTION_SIZES.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-400">
               速さ
               <select
