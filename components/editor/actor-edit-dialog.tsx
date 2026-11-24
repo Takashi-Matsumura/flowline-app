@@ -6,6 +6,8 @@ import { applyOps } from "@/lib/model/reducer";
 import type { Actor, FlowModel, ModelOp } from "@/lib/model/types";
 import { visibleSteps } from "@/lib/render/mermaid";
 import { NotesSection } from "./notes-section";
+import { outlineBtn, primaryBtn } from "@/components/ui/button-styles";
+import { CheckIcon } from "@/components/ui/icons";
 import { StakeholderEditor, type StakeholderRow } from "./stakeholder-editor";
 
 const toRows = (model: FlowModel): StakeholderRow[] =>
@@ -145,8 +147,7 @@ export function ActorEditDialog({ model, onSave }: { model: FlowModel; onSave: (
     ref.current?.close();
   };
 
-  const btn =
-    "rounded-md border border-black/15 px-3 py-1.5 text-sm hover:bg-black/5 disabled:opacity-50 dark:border-white/20 dark:hover:bg-white/10";
+  const btn = outlineBtn;
 
   return (
     <>
@@ -245,7 +246,8 @@ export function ActorEditDialog({ model, onSave }: { model: FlowModel; onSave: (
             <button type="button" className={btn} onClick={() => ref.current?.close()}>
               やめる
             </button>
-            <button type="button" className={btn} disabled={duplicate !== undefined} onClick={save}>
+            <button type="button" className={primaryBtn} disabled={duplicate !== undefined} onClick={save}>
+              <CheckIcon />
               保存
             </button>
           </div>

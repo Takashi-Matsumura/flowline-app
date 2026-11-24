@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import type { FlowModel, ModelOp, Step } from "@/lib/model/types";
 import { DisclosureIcon } from "@/components/ui/disclosure-icon";
+import { summaryBtn } from "@/components/ui/button-styles";
+import { TrashIcon } from "@/components/ui/icons";
 import { useCloseOnOutside } from "@/components/ui/use-close-on-outside";
 
 /** 取り消された（削除された）ステップ。新しく取り消したものほど前に並べる */
@@ -23,12 +25,13 @@ export function RetractedSteps({ model, onCommit }: { model: FlowModel; onCommit
   const nameOf = (id: string) => model.actors.find((a) => a.id === id)?.name ?? id;
   return (
     <details ref={detailsRef} className="group relative">
-      <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-md border border-black/15 px-2.5 py-1 text-sm hover:bg-black/5 [&::-webkit-details-marker]:hidden dark:border-white/20 dark:hover:bg-white/10">
-        <DisclosureIcon />
+      <summary className={summaryBtn}>
+        <TrashIcon />
         削除したステップ
         <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-600 dark:bg-white/10 dark:text-zinc-300">
           {steps.length}
         </span>
+        <DisclosureIcon />
       </summary>
       <ul className="absolute bottom-full left-0 z-10 mb-1 flex w-[min(30rem,calc(100vw-2rem))] max-h-[min(60vh,22rem)] flex-col gap-1 overflow-y-auto rounded-md border border-black/15 bg-background p-2 shadow-lg dark:border-white/20">
         {steps.map((s) => (

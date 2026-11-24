@@ -106,3 +106,97 @@ export const SpeakerIcon = (p: IconProps) => (
     <path d="M19 5a10 10 0 0 1 0 14" />
   </Svg>
 );
+
+/** 元に戻す（左へ戻る矢印） */
+export const UndoIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M9 14 4 9l5-5" />
+    <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
+  </Svg>
+);
+
+/** やり直し（右へ進む矢印） */
+export const RedoIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="m15 14 5-5-5-5" />
+    <path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13" />
+  </Svg>
+);
+
+/** 再生（右向きの三角） */
+export const PlayIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M7 4v16l13-8Z" />
+  </Svg>
+);
+
+/** 点検（チェックの付いたクリップボード） */
+export const ClipboardCheckIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="8" y="2" width="8" height="4" rx="1" />
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+    <path d="m9 14 2 2 4-4" />
+  </Svg>
+);
+
+/** 分岐を追加（枝分かれ） */
+export const BranchIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="6" cy="5" r="2" />
+    <circle cx="6" cy="19" r="2" />
+    <circle cx="18" cy="8" r="2" />
+    <path d="M6 7v10" />
+    <path d="M18 10c0 4-4 4-12 7" />
+  </Svg>
+);
+
+/** 全体を表示（四隅へ広がる矢印） */
+export const FitIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+    <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
+    <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+    <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+  </Svg>
+);
+
+/** 付箋（角の折れた紙） */
+export const NoteIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M15 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10Z" />
+    <path d="M15 21v-4a2 2 0 0 1 2-2h4" />
+  </Svg>
+);
+
+/** 枠を畳む（内向きの矢印） */
+export const FoldIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="m7 20 5-5 5 5" />
+    <path d="m7 4 5 5 5-5" />
+  </Svg>
+);
+
+/** 枠を開く（外向きの矢印） */
+export const UnfoldIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="m7 15 5 5 5-5" />
+    <path d="m7 9 5-5 5 5" />
+  </Svg>
+);
+
+/** 文書を作る（文字の並んだ紙） */
+export const DocumentIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+    <path d="M14 2v6h6" />
+    <path d="M8 13h8" />
+    <path d="M8 17h5" />
+  </Svg>
+);
+
+/** 戻る（左向きの山形） */
+export const ChevronLeftIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M15 6l-6 6 6 6" />
+  </Svg>
+);

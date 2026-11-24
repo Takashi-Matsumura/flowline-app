@@ -7,6 +7,8 @@ import type { FlowModel } from "@/lib/model/types";
 import { toDrawio } from "@/lib/render/drawio";
 import { addNotesToSvg } from "@/lib/render/svg-notes";
 import { DisclosureIcon } from "@/components/ui/disclosure-icon";
+import { DownloadIcon } from "@/components/ui/icons";
+import { outlineBtn, summaryBtn } from "@/components/ui/button-styles";
 import { toSvg11 } from "./svg11";
 import { useCloseOnOutside } from "@/components/ui/use-close-on-outside";
 import {
@@ -38,9 +40,6 @@ const BUTTONS: { format: ExportFormat; label: string; hint: string }[] = [
   },
 ];
 
-const TRIGGER_BTN =
-  "flex cursor-pointer list-none items-center gap-1.5 rounded-md border border-black/15 px-2.5 py-1 text-sm hover:bg-black/5 [&::-webkit-details-marker]:hidden dark:border-white/20 dark:hover:bg-white/10";
-
 /**
  * 図の書き出し（.drawio / .mmd / .svg）。「書き出し ▾」の下に畳む。
  * 図のデータそのもの（.json）は、一覧の「エクスポート」から書き出す（app/diagram-list.tsx）。
@@ -70,8 +69,9 @@ export function ExportButtons({ model, mermaidCode, svg, empty }: Props) {
 
   if (empty) {
     return (
-      <button type="button" disabled title="図がまだありません" className={`${TRIGGER_BTN} disabled:opacity-40`}>
-        ⤓ 書き出し
+      <button type="button" disabled title="図がまだありません" className={outlineBtn}>
+        <DownloadIcon />
+        書き出し
         <DisclosureIcon />
       </button>
     );
@@ -80,8 +80,9 @@ export function ExportButtons({ model, mermaidCode, svg, empty }: Props) {
   return (
     <div className="relative flex items-center gap-2">
       <details ref={detailsRef} className="group relative">
-        <summary className={TRIGGER_BTN}>
-          ⤓ 書き出し
+        <summary className={summaryBtn}>
+          <DownloadIcon />
+          書き出し
           <DisclosureIcon />
         </summary>
         {/* ボタンの左端に揃えて右へ広げる。右端に揃えると、ボタンが画面の左端にあるとき（削除したステップが無い図など）左にはみ出して見えなくなる */}
