@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { MAX_READING_CHARS, MAX_WORD_CHARS, type Reading } from "@/lib/readings";
 import { DisclosureIcon } from "./disclosure-icon";
+import { IconButton } from "./icon-button";
+import { SpeakerIcon, TrashIcon } from "./icons";
 
 async function errorOf(res: Response): Promise<string> {
   const json = (await res.json().catch(() => ({}))) as { error?: string };
@@ -10,8 +12,8 @@ async function errorOf(res: Response): Promise<string> {
 }
 
 const input = "w-full rounded-md border border-black/15 bg-transparent px-3 py-1.5 text-sm dark:border-white/20";
-const btn =
-  "rounded-md border border-black/15 px-3 py-1.5 text-sm hover:bg-black/5 disabled:opacity-50 dark:border-white/20 dark:hover:bg-white/10";
+const primary =
+  "rounded-md border border-sky-600 bg-sky-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-sky-700 disabled:border-black/15 disabled:bg-transparent disabled:font-normal disabled:text-zinc-400 disabled:shadow-none dark:border-sky-500 dark:bg-sky-500 dark:hover:bg-sky-600 dark:disabled:border-white/20";
 
 /**
  * 読みの辞書。社内のシステム名や略語など、VOICEVOX が読み違える語の読みを登録する。
@@ -134,16 +136,14 @@ export function ReadingDictionary() {
               onChange={(e) => setReading(e.target.value)}
             />
           </label>
-          <button
-            type="button"
-            className={btn}
+          <IconButton
+            label={listening === "draft" ? "準備中…" : "入力した読みを聞く"}
             disabled={!reading.trim() || listening !== null}
-            title="入力した読みを、読み上げの声で聞きます"
             onClick={() => void listen("draft", reading)}
           >
-            {listening === "draft" ? "準備中…" : "▶ 聞く"}
-          </button>
-          <button type="submit" className={btn} disabled={busy || !word.trim() || !reading.trim()}>
+            <SpeakerIcon />
+          </IconButton>
+          <button type="submit" className={primary} disabled={busy || !word.trim() || !reading.trim()}>
             登録
           </button>
         </form>
@@ -164,7 +164,7 @@ export function ReadingDictionary() {
               <li key={r.word} className="flex items-center gap-3 px-3 py-2 text-sm">
                 <button
                   type="button"
-                  className="min-w-0 flex-1 truncate text-left hover:underline"
+                  className="min-w-0 flex-1 truncate rounded px-1 -mx-1 text-left hover:bg-black/5 dark:hover:bg-white/10"
                   title="押すと上の欄に入ります（読みを直して登録すると上書きします）"
                   onClick={() => {
                     setWord(r.word);
@@ -175,19 +175,22 @@ export function ReadingDictionary() {
                   <span className="mx-2 text-zinc-400">→</span>
                   <span>{r.reading}</span>
                 </button>
-                <span className="flex shrink-0 gap-2">
-                  <button
-                    type="button"
-                    className={btn}
+                <span className="flex shrink-0 gap-1.5">
+                  <IconButton
+                    label={listening === r.word ? "準備中…" : "辞書を通した読み上げを聞く"}
                     disabled={listening !== null}
-                    title="辞書を通した読み上げを聞きます"
                     onClick={() => void listen(r.word, r.word)}
                   >
-                    {listening === r.word ? "準備中…" : "▶ 聞く"}
-                  </button>
-                  <button type="button" className={btn} disabled={busy} onClick={() => void send("DELETE", { word: r.word })}>
-                    削除
-                  </button>
+                    <SpeakerIcon />
+                  </IconButton>
+                  <IconButton
+                    label="この読みを削除"
+                    tone="danger"
+                    disabled={busy}
+                    onClick={() => void send("DELETE", { word: r.word })}
+                  >
+                    <TrashIcon />
+                  </IconButton>
                 </span>
               </li>
             ))}

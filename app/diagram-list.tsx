@@ -8,6 +8,8 @@ import type { DiagramFile, DiagramMeta } from "@/lib/store/diagram-types";
 import { MAX_IMPORT_BYTES, toFlowExport } from "@/lib/store/import";
 import { EXPORT_MIME, exportFileName } from "@/lib/render/export";
 import { download } from "@/components/diagram/download";
+import { IconButton } from "@/components/ui/icon-button";
+import { CheckIcon, CopyIcon, DownloadIcon, PencilIcon, PlusIcon, SearchIcon, TrashIcon, UploadIcon, XIcon } from "@/components/ui/icons";
 
 const fmt = (iso: string) => new Date(iso).toLocaleString("ja-JP", { hour12: false });
 
@@ -177,15 +179,13 @@ export function DiagramList({ initial }: { initial: DiagramMeta[] }) {
 
   const input =
     "w-full rounded-md border border-black/15 bg-transparent px-3 py-1.5 text-sm dark:border-white/20";
-  const btn =
-    "rounded-md border border-black/15 px-3 py-1.5 text-sm hover:bg-black/5 disabled:opacity-50 dark:border-white/20 dark:hover:bg-white/10";
 
   const shown = sortDiagrams(filterDiagrams(diagrams, query), sort);
   const sortHeader = (key: SortKey, label: string, align: "left" | "right" = "left") => {
     const active = sort.key === key;
     const arrow = (
-      <span aria-hidden className={`text-xs ${active ? "" : "opacity-0"}`}>
-        {sort.dir === "asc" ? "▲" : "▼"}
+      <span aria-hidden className={`text-xs ${active ? "" : "opacity-40"}`}>
+        {active ? (sort.dir === "asc" ? "▲" : "▼") : "↕"}
       </span>
     );
     return (
@@ -196,7 +196,7 @@ export function DiagramList({ initial }: { initial: DiagramMeta[] }) {
       >
         <button
           type="button"
-          className={`inline-flex items-center gap-1 rounded hover:text-inherit ${active ? "text-inherit" : ""}`}
+          className={`inline-flex items-center gap-1 rounded px-1 -mx-1 hover:bg-black/5 hover:text-inherit dark:hover:bg-white/10 ${active ? "text-inherit" : ""}`}
           title={`${label}で並べ替え`}
           onClick={() =>
             setSort(active ? { key, dir: sort.dir === "asc" ? "desc" : "asc" } : { key, dir: DEFAULT_DIR[key] })
@@ -211,7 +211,12 @@ export function DiagramList({ initial }: { initial: DiagramMeta[] }) {
     );
   };
   const small =
-    "rounded-md border border-black/15 px-2.5 py-1 text-xs hover:bg-black/5 disabled:opacity-50 dark:border-white/20 dark:hover:bg-white/10";
+    "rounded-md border border-black/15 bg-white px-2.5 py-1 text-xs shadow-sm hover:bg-black/5 disabled:opacity-50 dark:border-white/20 dark:bg-zinc-900 dark:hover:bg-white/10";
+  // 押せるボタンは白い面と影で浮かせる。主な操作（作成して開く）は色で塗る
+  const outline =
+    "inline-flex items-center justify-center gap-1.5 rounded-md border border-black/15 bg-white px-3 py-1.5 text-sm shadow-sm hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 disabled:opacity-50 disabled:shadow-none dark:border-white/20 dark:bg-zinc-900 dark:hover:border-sky-400/50 dark:hover:bg-sky-400/10 dark:hover:text-sky-300";
+  const primary =
+    "inline-flex items-center justify-center gap-1.5 rounded-md border border-sky-600 bg-sky-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-sky-700 disabled:border-black/15 disabled:bg-transparent disabled:font-normal disabled:text-zinc-400 disabled:shadow-none dark:border-sky-500 dark:bg-sky-500 dark:hover:bg-sky-600 dark:disabled:border-white/20";
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-4">
@@ -239,17 +244,19 @@ export function DiagramList({ initial }: { initial: DiagramMeta[] }) {
                 placeholder="例: 月次請求書発行業務"
               />
             </label>
-            <button type="submit" className={btn} disabled={busy || title.trim() === ""}>
+            <button type="submit" className={primary} disabled={busy || title.trim() === ""}>
+              <PlusIcon />
               作成して開く
             </button>
             <span className="text-sm text-zinc-500 sm:pb-1.5">または</span>
             <button
               type="button"
-              className={btn}
+              className={outline}
               disabled={busy}
               title="エクスポートした業務フロー（.json）から新しい図を作ります"
               onClick={() => fileInput.current?.click()}
             >
+              <UploadIcon />
               ファイルから読み込む
             </button>
             <input
@@ -276,11 +283,12 @@ export function DiagramList({ initial }: { initial: DiagramMeta[] }) {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-medium">保存済みの図（{diagrams.length}）</h2>
             {diagrams.length > 0 && (
-              <label className="flex items-center gap-2 text-sm text-zinc-500">
+              <label className="relative flex items-center gap-2 text-sm text-zinc-500">
                 <span className="sr-only">業務名で絞り込む</span>
+                <SearchIcon className="pointer-events-none absolute left-2.5 text-zinc-400" />
                 <input
                   type="search"
-                  className={`${input} w-64`}
+                  className={`${input} w-64 pl-8`}
                   value={query}
                   placeholder="業務名で絞り込む"
                   onChange={(e) => setQuery(e.target.value)}
@@ -339,7 +347,11 @@ export function DiagramList({ initial }: { initial: DiagramMeta[] }) {
                             }}
                           />
                         ) : (
-                          <a href={`/${d.slug}`} className="block truncate font-medium hover:underline" title={d.name}>
+                          <a
+                            href={`/${d.slug}`}
+                            className="block truncate font-medium text-sky-700 underline-offset-2 hover:underline dark:text-sky-300"
+                            title={`${d.name} を開く`}
+                          >
                             {d.name}
                           </a>
                         )}
@@ -353,20 +365,24 @@ export function DiagramList({ initial }: { initial: DiagramMeta[] }) {
                         <span className="flex justify-end gap-1.5">
                           {editingSlug === d.slug ? (
                             <>
-                              <button
-                                className={small}
+                              <IconButton
+                                label="この名前で保存"
                                 disabled={renaming || editName.trim() === ""}
                                 onClick={() => void saveRename(d.slug)}
                               >
-                                保存
-                              </button>
-                              <button className={small} disabled={renaming} onClick={() => setEditingSlug(null)}>
-                                やめる
-                              </button>
+                                <CheckIcon />
+                              </IconButton>
+                              <IconButton label="変更をやめる" disabled={renaming} onClick={() => setEditingSlug(null)}>
+                                <XIcon />
+                              </IconButton>
                             </>
                           ) : confirming === d.slug ? (
+                            // 取り消せない操作なので、確かめるところは文字で出す
                             <>
-                              <button className={small} onClick={() => void remove(d.slug)}>
+                              <button
+                                className="rounded-md border border-red-600 bg-red-600 px-2.5 py-1 text-xs font-medium text-white shadow-sm hover:bg-red-700"
+                                onClick={() => void remove(d.slug)}
+                              >
                                 削除する
                               </button>
                               <button className={small} onClick={() => setConfirming(null)}>
@@ -375,28 +391,26 @@ export function DiagramList({ initial }: { initial: DiagramMeta[] }) {
                             </>
                           ) : (
                             <>
-                              <button className={small} onClick={() => startEdit(d.slug, d.name)}>
-                                名前を変更
-                              </button>
-                              <button
-                                className={small}
+                              <IconButton label="名前を変更" onClick={() => startEdit(d.slug, d.name)}>
+                                <PencilIcon />
+                              </IconButton>
+                              <IconButton
+                                label={copying === d.slug ? "コピー中…" : "コピー（元の図はそのまま）"}
                                 disabled={copying !== null}
-                                title="この図を写した新しい図を作ります（元の図はそのまま）"
                                 onClick={() => void copy(d.slug)}
                               >
-                                {copying === d.slug ? "コピー中…" : "コピー"}
-                              </button>
-                              <button
-                                className={small}
+                                <CopyIcon />
+                              </IconButton>
+                              <IconButton
+                                label={exporting === d.slug ? "書き出し中…" : "エクスポート（.json。読み込み直せます）"}
                                 disabled={exporting !== null}
-                                title="図のデータ（.json）を保存します。「ファイルから読み込む」で、別の環境でも同じ図を作れます（バックアップ・受け渡し用）"
                                 onClick={() => void exportJson(d.slug, d.name)}
                               >
-                                {exporting === d.slug ? "書き出し中…" : "エクスポート"}
-                              </button>
-                              <button className={small} onClick={() => setConfirming(d.slug)}>
-                                削除
-                              </button>
+                                <DownloadIcon />
+                              </IconButton>
+                              <IconButton label="削除" tone="danger" onClick={() => setConfirming(d.slug)}>
+                                <TrashIcon />
+                              </IconButton>
                             </>
                           )}
                         </span>
