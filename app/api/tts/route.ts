@@ -6,6 +6,11 @@ const VOICEVOX_TIMEOUT_MS = 20_000;
 /** VOICEVOX の speedScale が受け付ける範囲 */
 const MIN_SPEED = 0.5;
 const MAX_SPEED = 2;
+/**
+ * 声の前に入れる無音（秒）。VOICEVOX の既定は 0.1 秒。
+ * 出力先（Windows の HDMI 音声など）が鳴り始めるまでに頭が欠けることがあるので、少し長めに取る。
+ */
+const MIN_PRE_PHONEME_SEC = 0.3;
 
 /**
  * VOICEVOX が読み違える語と、その読み（カタカナ）。
@@ -120,6 +125,8 @@ export async function POST(request: Request) {
       await call(`/audio_query?${new URLSearchParams({ text: toSpeech(text), speaker })}`, { method: "POST" })
     ).json()) as Record<string, unknown>;
     query.speedScale = speed;
+    const pre = typeof query.prePhonemeLength === "number" ? query.prePhonemeLength : 0;
+    query.prePhonemeLength = Math.max(pre, MIN_PRE_PHONEME_SEC);
     const wav = await call(`/synthesis?${new URLSearchParams({ speaker })}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

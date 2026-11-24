@@ -6,6 +6,7 @@ import type { FlowModel } from "@/lib/model/types";
 import { buildScenes, narrate, speechOf, type Narration, type Scene } from "@/lib/preview/scenes";
 import { toMermaid } from "@/lib/render/mermaid";
 import { fetchVoices, useVoiceChoice, VoiceSelect, type Tts } from "@/components/ui/voice";
+import { useAudioKeepAlive } from "@/components/ui/use-audio-keep-alive";
 
 /** 1 場面を見せる時間（ミリ秒）。字幕が長いほど長く、ステップは矢印の丸が走る分を足す */
 function durationOf(scene: Scene): number {
@@ -135,10 +136,19 @@ export function FlowPlayer({ name, model, onClose }: { name: string; model: Flow
     [voiceSpeed, speakerId],
   );
   const speaking = voice && tts.status === "ready";
+  useAudioKeepAlive(speaking);
+
+  // 今の場面。AI の言い回しが届くと場面の一覧が作り直されるが、それで再生をやり直すと
+  // 読みかけの声が頭から読み直しになる。再生の効果は場面の番号で動かし、中身はここから読む
+  const sceneRef = useRef(scene);
+  useEffect(() => {
+    sceneRef.current = scene;
+  }, [scene]);
 
   // 再生中は、場面の時間が過ぎたら（読み上げ中は読み終えたら）次へ。最後の場面で止まる
   useEffect(() => {
     if (!playing) return;
+    const scene = sceneRef.current;
     const advance = () => {
       if (index >= last) setPlaying(false);
       else setIndex(index + 1);
@@ -169,14 +179,18 @@ export function FlowPlayer({ name, model, onClose }: { name: string; model: Flow
         return audio.play();
       })
       .catch(fail);
-    // 次の場面の音声を先に作っておき、場面の切り替わりで待たせない
-    if (index < last) speech(speechOf(scenes[index + 1])).catch(() => {});
     return () => {
       cancelled = true;
       clearTimeout(timer);
       audio?.pause();
     };
-  }, [playing, index, last, scene, scenes, speed, speaking, speech]);
+  }, [playing, index, last, speed, speaking, speech]);
+
+  // 次の場面の音声を先に作っておき、場面の切り替わりで待たせない（AI の言い回しが届いたら作り直す）
+  const nextSpeech = index < last ? speechOf(scenes[index + 1]) : null;
+  useEffect(() => {
+    if (playing && speaking && nextSpeech) speech(nextSpeech).catch(() => {});
+  }, [playing, speaking, nextSpeech, speech]);
 
   const go = useCallback(
     (i: number) => setIndex(Math.max(0, Math.min(last, i))),

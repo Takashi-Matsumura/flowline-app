@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { parseVtt, type Cue } from "@/lib/vtt";
 import { fetchVoices, useVoiceChoice, type Tts, type Voice } from "./voice";
+import { useAudioKeepAlive } from "./use-audio-keep-alive";
 
 /**
  * 読み上げない字幕。動画は音声なしの前提で作ってあり、
@@ -105,6 +106,7 @@ export function useVideoNarration({
 
   const list = cues?.src === vttSrc ? cues.list : null;
   const active = enabled && narration.status === "ready" && video !== null && list !== null;
+  useAudioKeepAlive(active);
 
   useEffect(() => {
     if (!active || !video || !list) return;
