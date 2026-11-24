@@ -7,6 +7,21 @@ import { ExportButtons } from "@/components/diagram/export-buttons";
 import { MermaidDiagram, renderMermaidSvg } from "@/components/diagram/mermaid-diagram";
 import { noteKeys } from "@/components/diagram/note-overlay";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { IconButton } from "@/components/ui/icon-button";
+import { outlineBtn, outlineBtnPressed, primaryBtn } from "@/components/ui/button-styles";
+import {
+  BranchIcon,
+  ChevronLeftIcon,
+  ClipboardCheckIcon,
+  FitIcon,
+  FoldIcon,
+  NoteIcon,
+  PlayIcon,
+  PlusIcon,
+  RedoIcon,
+  UndoIcon,
+  UnfoldIcon,
+} from "@/components/ui/icons";
 import { useTheme } from "@/lib/theme";
 import { RetractedSteps, RetractNotice } from "./retracted-steps";
 import { StepPanel } from "./step-panel";
@@ -294,9 +309,6 @@ export function Editor({
     setPanel({ mode: "add", afterStepId: null, into: armIds[0], seq: nextSeq });
   };
 
-  const btn =
-    "rounded-md border border-black/15 px-3 py-1.5 text-sm hover:bg-black/5 disabled:opacity-40 dark:border-white/20 dark:hover:bg-white/10";
-
   return (
     <div className="flex h-dvh flex-col">
       <header className="flex items-center justify-between gap-4 border-b border-black/10 px-4 py-2 dark:border-white/15">
@@ -305,21 +317,9 @@ export function Editor({
             href="/"
             aria-label="一覧に戻る"
             title="一覧に戻る"
-            className="flex h-8 w-8 shrink-0 items-center justify-center self-center rounded-full border border-black/15 text-zinc-500 hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+            className="flex h-8 w-8 shrink-0 items-center justify-center self-center rounded-full border border-black/15 bg-white text-zinc-600 shadow-sm transition-colors hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-sky-500 dark:border-white/20 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-sky-400/50 dark:hover:bg-sky-400/10 dark:hover:text-sky-300"
           >
-            <svg
-              viewBox="0 0 24 24"
-              width="16"
-              height="16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
-            >
-              <path d="M15 6l-6 6 6 6" />
-            </svg>
+            <ChevronLeftIcon />
           </Link>
           <h1 className="truncate text-lg font-semibold">{name}</h1>
         </div>
@@ -333,76 +333,85 @@ export function Editor({
 
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-black/10 px-4 py-2 dark:border-white/15">
         <ActorEditDialog model={model} onSave={commit} />
-        <button type="button" className={btn} disabled={!drawable} onClick={openAdd}>
-          ＋ ステップを追加
+        {/* 図を書き進める主な操作なので、ステップの追加は青く塗る */}
+        <button type="button" className={primaryBtn} disabled={!drawable} onClick={openAdd}>
+          <PlusIcon />
+          ステップを追加
         </button>
         <button
           type="button"
-          className={btn}
+          className={outlineBtn}
           disabled={!drawable}
           title="条件によって変わる作業（もし〜なら）や、くり返す作業の枠を先に作ります"
           onClick={openBranch}
         >
-          ＋ 分岐を追加
+          <BranchIcon />
+          分岐を追加
         </button>
         <span className="mx-1 h-6 w-px bg-black/10 dark:bg-white/15" aria-hidden />
-        <button type="button" className={btn} disabled={history.past.length === 0} onClick={undo} title="元に戻す（⌘Z）">
-          ↶ 元に戻す
-        </button>
-        <button
-          type="button"
-          className={btn}
+        <IconButton label="元に戻す（⌘Z）" tip="below" tipAlign="left" disabled={history.past.length === 0} onClick={undo}>
+          <UndoIcon />
+        </IconButton>
+        <IconButton
+          label="やり直し（⇧⌘Z）"
+          tip="below"
+          tipAlign="left"
           disabled={history.future.length === 0}
           onClick={redo}
-          title="やり直し（⇧⌘Z）"
         >
-          ↷ やり直し
-        </button>
+          <RedoIcon />
+        </IconButton>
         <span className="mx-1 h-6 w-px bg-black/10 dark:bg-white/15" aria-hidden />
         <button
           type="button"
-          className={btn}
+          className={outlineBtn}
           disabled={steps.length === 0}
           title="起点から終点まで、図の上で手順を順に追いながら、字幕で流れを確認します"
           onClick={() => setPreviewing(true)}
         >
-          ▶ フローの再生
+          <PlayIcon />
+          フローの再生
         </button>
         <button
           type="button"
-          className={`${btn} ${panel?.mode === "review" ? "bg-black/5 dark:bg-white/10" : ""}`}
+          className={panel?.mode === "review" ? outlineBtnPressed : outlineBtn}
           disabled={!drawable}
           aria-pressed={panel?.mode === "review"}
           title="図の抜けや書き方の気になる点を、決まりごとと AI で点検します"
           onClick={() => setPanel(panel?.mode === "review" ? null : { mode: "review", focus: 0 })}
         >
-          ✓ フローを点検
+          <ClipboardCheckIcon />
+          フローを点検
         </button>
         <span className="flex-1" />
         {drawable && (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
+            {/* 図の見え方の切り替えはアイコンだけにする。説明は吹き出しで出す */}
             {allNotes.length > 0 && (
-              <button
-                type="button"
-                className="mr-2 rounded-md px-2 py-1 text-xs text-zinc-600 hover:bg-black/5 dark:text-zinc-400 dark:hover:bg-white/10"
-                title={`図の付箋をすべて${allNotesOpen ? "閉じます" : "開きます"}（図のアイコンを押すと 1 つずつ開けます）`}
+              <IconButton
+                label={allNotesOpen ? "付箋をすべて閉じる" : "付箋をすべて開く（図のアイコンで 1 つずつも開けます）"}
+                tip="below"
+                pressed={allNotesOpen}
                 onClick={() => setOpenNotes(allNotesOpen ? new Set() : new Set(allNotes))}
               >
-                {allNotesOpen ? "付箋を閉じる" : "付箋を開く"}
-              </button>
+                <NoteIcon />
+              </IconButton>
             )}
             {frames.length > 0 && (
-              <button
-                type="button"
-                className="mr-2 rounded-md px-2 py-1 text-xs text-zinc-600 hover:bg-black/5 dark:text-zinc-400 dark:hover:bg-white/10"
-                title="枠（alt / opt / loop）は、見出しの札を押すと 1 つずつ畳めます。畳んだ枠は押すと開きます"
+              <IconButton
+                label={
+                  folded.length > 0
+                    ? "枠をすべて開く"
+                    : "枠（alt / opt / loop）をすべて畳む（見出しの札で 1 つずつも畳めます）"
+                }
+                tip="below"
                 onClick={() => setCollapsed(folded.length > 0 ? new Set() : new Set(frames))}
               >
-                {folded.length > 0 ? "▾ 枠をすべて開く" : "▸ 枠をすべて畳む"}
-              </button>
+                {folded.length > 0 ? <UnfoldIcon /> : <FoldIcon />}
+              </IconButton>
             )}
             {hasAssignees && (
-              <label className="mr-2 flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
+              <label className="mx-1 flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
                 <input type="checkbox" checked={showAssignees} onChange={(e) => setShowAssignees(e.target.checked)} />
                 担当者を表示
               </label>
@@ -410,20 +419,15 @@ export function Editor({
             {/* 拡大縮小は図の上で ⌘ + スクロール。ここは今の倍率の表示と、幅に合わせ直すボタン */}
             <button
               type="button"
-              className="rounded-md px-2 py-1 text-xs tabular-nums text-zinc-600 hover:bg-black/5 dark:text-zinc-400 dark:hover:bg-white/10"
+              className={`${outlineBtn} h-8 px-2 text-xs tabular-nums`}
               title="⌘ + スクロールで拡大縮小、Space + ドラッグで移動。クリックで幅に合わせる"
               onClick={() => setZoom(1)}
             >
               {Math.round(zoom * 100)}%
             </button>
-            <button
-              type="button"
-              className="rounded-md px-2 py-1 text-xs text-zinc-600 hover:bg-black/5 dark:text-zinc-400 dark:hover:bg-white/10"
-              title="図の全体（縦も）が画面に収まるように縮めます"
-              onClick={fitAll}
-            >
-              全体を表示
-            </button>
+            <IconButton label="全体を表示（縦も画面に収める）" tip="below" onClick={fitAll}>
+              <FitIcon />
+            </IconButton>
           </div>
         )}
       </div>
@@ -460,13 +464,13 @@ export function Editor({
             ) : (
               <p className="rounded-md border border-dashed border-black/15 p-4 text-sm text-zinc-500 dark:border-white/20">
                 まだ図がありません。まず左上の丸いボタン（登場人物を登録）から、業務に関わる人・部署・システムを並べてください。
-                そのあと「＋ ステップを追加」で、誰が誰に何をするかを順に書いていきます。
+                そのあと「ステップを追加」で、誰が誰に何をするかを順に書いていきます。
               </p>
             )}
           </div>
           {drawable && steps.length === 0 && (
             <p className="mt-2 shrink-0 text-sm text-zinc-500">
-              「＋ ステップを追加」で、最初のステップを書いてください。
+              「ステップを追加」で、最初のステップを書いてください。
             </p>
           )}
         </div>

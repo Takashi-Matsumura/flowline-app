@@ -6,6 +6,8 @@ import { EXPORT_MIME, exportFileName } from "@/lib/render/export";
 import type { DutiesReadiness } from "@/lib/summary/readiness";
 import { download } from "@/components/diagram/download";
 import { SummaryPreview } from "./summary-preview";
+import { outlineBtn } from "@/components/ui/button-styles";
+import { CopyIcon, DocumentIcon, DownloadIcon } from "@/components/ui/icons";
 
 type State =
   | { kind: "idle" }
@@ -77,8 +79,7 @@ export function SummaryButton({
     }
   }
 
-  const btn =
-    "rounded-md border border-black/15 px-2.5 py-1 text-sm hover:bg-black/5 disabled:opacity-40 dark:border-white/20 dark:hover:bg-white/10";
+  const btn = outlineBtn;
 
   return (
     <>
@@ -93,6 +94,7 @@ export function SummaryButton({
             : "図から業務分掌ドキュメント（Markdown）を作ります"
         }
       >
+        <DocumentIcon />
         業務分掌を作る
       </button>
       {notReady && !empty && (
@@ -152,13 +154,15 @@ export function SummaryButton({
                   className={btn}
                   onClick={() => download(exportFileName(model.scope.title, "md"), EXPORT_MIME.md, state.markdown)}
                 >
-                  ⤓ .md を保存
+                  <DownloadIcon />
+                  .md を保存
                 </button>
                 <button
                   type="button"
                   className={btn}
                   onClick={() => void copyText(state.markdown).then(setCopied)}
                 >
+                  <CopyIcon />
                   コピー
                 </button>
                 {copied && <span className="self-center text-xs text-zinc-500">コピーしました</span>}

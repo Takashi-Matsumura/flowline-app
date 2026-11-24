@@ -9,6 +9,7 @@ import { MAX_IMPORT_BYTES, toFlowExport } from "@/lib/store/import";
 import { EXPORT_MIME, exportFileName } from "@/lib/render/export";
 import { download } from "@/components/diagram/download";
 import { IconButton } from "@/components/ui/icon-button";
+import { outlineBtn, primaryBtn } from "@/components/ui/button-styles";
 import { CheckIcon, CopyIcon, DownloadIcon, PencilIcon, PlusIcon, SearchIcon, TrashIcon, UploadIcon, XIcon } from "@/components/ui/icons";
 
 const fmt = (iso: string) => new Date(iso).toLocaleString("ja-JP", { hour12: false });
@@ -212,12 +213,8 @@ export function DiagramList({ initial }: { initial: DiagramMeta[] }) {
   };
   const small =
     "rounded-md border border-black/15 bg-white px-2.5 py-1 text-xs shadow-sm hover:bg-black/5 disabled:opacity-50 dark:border-white/20 dark:bg-zinc-900 dark:hover:bg-white/10";
-  // 押せるボタンは白い面と影で浮かせる。主な操作（作成して開く）は色で塗る
-  const outline =
-    "inline-flex items-center justify-center gap-1.5 rounded-md border border-black/15 bg-white px-3 py-1.5 text-sm shadow-sm hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 disabled:opacity-50 disabled:shadow-none dark:border-white/20 dark:bg-zinc-900 dark:hover:border-sky-400/50 dark:hover:bg-sky-400/10 dark:hover:text-sky-300";
-  const primary =
-    "inline-flex items-center justify-center gap-1.5 rounded-md border border-sky-600 bg-sky-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-sky-700 disabled:border-black/15 disabled:bg-transparent disabled:font-normal disabled:text-zinc-400 disabled:shadow-none dark:border-sky-500 dark:bg-sky-500 dark:hover:bg-sky-600 dark:disabled:border-white/20";
-
+  const outline = outlineBtn;
+  const primary = primaryBtn;
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-4">
       <TutorialVideos />
