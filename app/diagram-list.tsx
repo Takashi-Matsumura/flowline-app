@@ -192,7 +192,7 @@ export function DiagramList({ initial }: { initial: DiagramMeta[] }) {
       <th
         scope="col"
         aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
-        className={`px-3 py-2 font-medium ${key === "name" ? "" : "w-px whitespace-nowrap"} ${align === "right" ? "text-right" : "text-left"}`}
+        className={`px-3 py-2 font-medium ${key === "name" ? "min-w-48" : "w-px whitespace-nowrap"} ${align === "right" ? "text-right" : "text-left"}`}
       >
         <button
           type="button"
@@ -324,7 +324,7 @@ export function DiagramList({ initial }: { initial: DiagramMeta[] }) {
                   )}
                   {shown.map((d) => (
                     <tr key={d.slug} className="hover:bg-black/[0.02] dark:hover:bg-white/[0.03]">
-                      <td className="max-w-0 px-3 py-2">
+                      <td className="min-w-48 max-w-0 px-3 py-2">
                         {editingSlug === d.slug ? (
                           <input
                             autoFocus
