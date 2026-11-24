@@ -4,8 +4,10 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { TutorialVideos } from "@/components/ui/tutorial-videos";
 import { ReadingDictionary } from "@/components/ui/reading-dictionary";
-import type { DiagramMeta } from "@/lib/store/diagram-types";
-import { MAX_IMPORT_BYTES } from "@/lib/store/import";
+import type { DiagramFile, DiagramMeta } from "@/lib/store/diagram-types";
+import { MAX_IMPORT_BYTES, toFlowExport } from "@/lib/store/import";
+import { EXPORT_MIME, exportFileName } from "@/lib/render/export";
+import { download } from "@/components/diagram/download";
 
 const fmt = (iso: string) => new Date(iso).toLocaleString("ja-JP", { hour12: false });
 
@@ -21,6 +23,8 @@ export function DiagramList({ initial }: { initial: DiagramMeta[] }) {
   const [editName, setEditName] = useState("");
   const [renaming, setRenaming] = useState(false);
   const [copying, setCopying] = useState<string | null>(null);
+  const [exporting, setExporting] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   async function create(name: string) {
@@ -84,6 +88,26 @@ export function DiagramList({ initial }: { initial: DiagramMeta[] }) {
       setError(e instanceof Error ? e.message : "コピーに失敗しました");
     } finally {
       setCopying(null);
+    }
+  }
+
+  /** 図のデータ（.json）を書き出す。一覧の「ファイルから読み込む」で、別の環境でも同じ図を作れる */
+  async function exportJson(slug: string, name: string) {
+    setConfirming(null);
+    setError(null);
+    setNotice(null);
+    setExporting(slug);
+    try {
+      const res = await fetch(`/api/diagrams/${slug}`);
+      const data = (await res.json().catch(() => ({}))) as Partial<DiagramFile> & { error?: string };
+      if (!res.ok || !data.model) throw new Error(data.error ?? "図を読み込めませんでした");
+      const file = exportFileName(name, "json");
+      download(file, EXPORT_MIME.json, toFlowExport(data.model));
+      setNotice(`${file} を保存しました`);
+    } catch (e) {
+      setError(e instanceof Error ? `エクスポートできませんでした: ${e.message}` : "エクスポートできませんでした");
+    } finally {
+      setExporting(null);
     }
   }
 
@@ -181,6 +205,11 @@ export function DiagramList({ initial }: { initial: DiagramMeta[] }) {
 
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">保存済みの図（{diagrams.length}）</h2>
+        {notice && (
+          <p role="status" className="text-sm text-zinc-500">
+            {notice}
+          </p>
+        )}
         {diagrams.length === 0 ? (
           <p className="text-sm text-zinc-500">まだありません。</p>
         ) : (
@@ -243,6 +272,14 @@ export function DiagramList({ initial }: { initial: DiagramMeta[] }) {
                       onClick={() => void copy(d.slug)}
                     >
                       {copying === d.slug ? "コピー中…" : "コピー"}
+                    </button>
+                    <button
+                      className={btn}
+                      disabled={exporting !== null}
+                      title="図のデータ（.json）を保存します。「ファイルから読み込む」で、別の環境でも同じ図を作れます（バックアップ・受け渡し用）"
+                      onClick={() => void exportJson(d.slug, d.name)}
+                    >
+                      {exporting === d.slug ? "書き出し中…" : "エクスポート"}
                     </button>
                     <button className={btn} onClick={() => setConfirming(d.slug)}>
                       削除
