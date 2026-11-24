@@ -83,7 +83,7 @@ export function Editor({
   const model = history.present;
   const status = useDiagramAutosave(slug, model);
   const [panel, setPanel] = useState<Panel>(null);
-  const { zoom, setZoom, containerRef, hand } = useWheelZoom();
+  const { zoom, setZoom, fitAll, containerRef, hand } = useWheelZoom();
   const [showAssignees, setShowAssignees] = useState(false);
   const [rendered, setRendered] = useState<{ svg: string; code: string } | null>(null);
   const [previewing, setPreviewing] = useState(false);
@@ -416,6 +416,14 @@ export function Editor({
             >
               {Math.round(zoom * 100)}%
             </button>
+            <button
+              type="button"
+              className="rounded-md px-2 py-1 text-xs text-zinc-600 hover:bg-black/5 dark:text-zinc-400 dark:hover:bg-white/10"
+              title="図の全体（縦も）が画面に収まるように縮めます"
+              onClick={fitAll}
+            >
+              全体を表示
+            </button>
           </div>
         )}
       </div>
@@ -532,7 +540,7 @@ export function Editor({
           <ThemeToggle />
         </span>
       </div>
-      {previewing && <FlowPlayer name={name} model={model} onClose={() => setPreviewing(false)} />}
+      {previewing && <FlowPlayer name={name} model={model} onCommit={commit} onClose={() => setPreviewing(false)} />}
     </div>
   );
 }
