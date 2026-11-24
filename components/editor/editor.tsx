@@ -540,7 +540,16 @@ export function Editor({
           <ThemeToggle />
         </span>
       </div>
-      {previewing && <FlowPlayer name={name} model={model} onCommit={commit} onClose={() => setPreviewing(false)} />}
+      {previewing && <FlowPlayer
+          name={name}
+          model={model}
+          onCommit={commit}
+          onClose={(stepId) => {
+            setPreviewing(false);
+            // 再生で最後に見ていた手順を選んだ状態にして、そのまま直せるようにする
+            if (stepId && steps.some((s) => s.id === stepId)) setPanel({ mode: "edit", stepId });
+          }}
+        />}
     </div>
   );
 }

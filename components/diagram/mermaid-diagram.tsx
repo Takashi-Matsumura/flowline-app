@@ -74,6 +74,8 @@ function stepAt(target: EventTarget): number | null {
  * 図のコードは変えずに描いた SVG へ印を付けるので、書き出す図には入らない。
  */
 const SELECTED_ATTR = "data-selected";
+/** 選んだステップを「見えている」とみなす、表示領域の上下の端からの余白（px）。ステップ名の下の矢印と番号の分 */
+const SELECTED_MARGIN_PX = 80;
 const FOCUS_ATTR = "data-focus";
 const MARK_CLASS = [
   "[&_.messageText[data-focus]]:!fill-amber-600 [&_.messageText[data-focus]]:font-bold dark:[&_.messageText[data-focus]]:!fill-amber-400",
@@ -768,6 +770,7 @@ export function MermaidDiagram({
 
   // 強調するステップが変わったら、見えるところまでスクロールする（見えていれば動かない）
   const shownFocusRef = useRef(0);
+  const shownSelectedRef = useRef(0);
 
   // 付箋の印は、中身（番号と状態）が変わったときだけ付け直す（Map は毎回作り直される）
   const notesKey = notes
@@ -789,6 +792,22 @@ export function MermaidDiagram({
         ?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
     }
     markStep(svgHostRef.current, SELECTED_ATTR, selectedStep);
+    // 選ぶステップが変わったら、十分に見えていないときだけ真ん中までスクロールする
+    // （再生を閉じて、最後に見ていた手順を選んだときなど。図の上で押したときは見えているので動かない）。
+    // 印はステップ名の文字に付くので、その下の矢印と番号まで見えるよう、端から余白を取って判定する
+    if (selectedStep !== shownSelectedRef.current) {
+      shownSelectedRef.current = selectedStep;
+      const label = svgHostRef.current.querySelector(`[${SELECTED_ATTR}]`);
+      const viewport = svgHostRef.current.closest(".overflow-auto");
+      if (label && viewport) {
+        const r = label.getBoundingClientRect();
+        const v = viewport.getBoundingClientRect();
+        const margin = Math.min(SELECTED_MARGIN_PX, v.height / 4);
+        if (r.top < v.top + margin || r.bottom > v.bottom - margin || r.left < v.left || r.right > v.right) {
+          label.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+        }
+      }
+    }
     markNotes(svgHostRef.current, notes);
     if (play) markPlay(svgHostRef.current, play);
     // 付箋のアイコンの位置を測る。図の大きさ（拡大・パネルの開閉・窓の幅）が変わるたびに測り直す
