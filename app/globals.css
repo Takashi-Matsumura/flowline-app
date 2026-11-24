@@ -295,3 +295,20 @@ body {
     transition: none !important;
   }
 }
+
+/*
+ * 押せるものには指のカーソルを出す（Tailwind v4 の既定では、ボタンも矢印のまま）。
+ * 押せない（disabled）ものは禁止のカーソルにして、押せるものと見分けられるようにする。
+ */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  summary,
+  select:not(:disabled),
+  input[type="checkbox"]:not(:disabled) {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+}
