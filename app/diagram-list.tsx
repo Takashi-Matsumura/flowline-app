@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { TutorialVideos } from "@/components/ui/tutorial-videos";
+import { ReadingDictionary } from "@/components/ui/reading-dictionary";
 import type { DiagramMeta } from "@/lib/store/diagram-types";
 import { MAX_IMPORT_BYTES } from "@/lib/store/import";
 
@@ -253,6 +254,8 @@ export function DiagramList({ initial }: { initial: DiagramMeta[] }) {
           </ul>
         )}
       </section>
+
+      <ReadingDictionary />
     </div>
   );
 }

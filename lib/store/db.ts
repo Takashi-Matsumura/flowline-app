@@ -6,6 +6,7 @@ import path from "node:path";
  * 保存先の SQLite（`data/flowline.db`。`DATA_DIR` で場所を変えられる。.gitignore 済み）。server 専用。
  *
  * - `diagrams`: 業務フロー図（lib/store/diagrams.ts）。`collapsed` は画面で畳んでいる枠
+ * - `readings`: 読み上げの読みの辞書（lib/store/readings.ts）。`word_key` は大文字・小文字をそろえた表記
  *
  * テーブルは起動時に `CREATE TABLE IF NOT EXISTS` で作る（マイグレーションの仕組みは持たず、足した列だけ下で足す）。
  */
@@ -28,6 +29,12 @@ export function db(): DatabaseSync {
       updated_at TEXT NOT NULL,
       model TEXT NOT NULL,
       collapsed TEXT NOT NULL DEFAULT '[]'
+    );
+    CREATE TABLE IF NOT EXISTS readings (
+      word_key TEXT PRIMARY KEY,
+      word TEXT NOT NULL,
+      reading TEXT NOT NULL,
+      updated_at TEXT NOT NULL
     );
   `);
   // 画面で畳んでいる枠（collapsed）は後から足した列。それより前に作った DB には足す
