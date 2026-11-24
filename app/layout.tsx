@@ -31,7 +31,7 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Flowline",
+  title: "Flowline v2",
   description: "登場人物とステップを並べて業務フロー図を描き、業務分掌まで作る",
 };
 

@@ -81,7 +81,7 @@ export function TutorialVideos() {
   return (
     <section className="flex flex-col gap-3">
       <h2 className="font-medium">使い方の動画</h2>
-      <ul className="grid gap-3 sm:grid-cols-2">
+      <ul className="grid gap-3 sm:grid-cols-3">
         {VIDEOS.map((v) => (
           <li key={v.id}>
             <button

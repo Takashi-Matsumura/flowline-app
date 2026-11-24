@@ -1,6 +1,6 @@
 {
   "name": "flowline-app",
-  "version": "0.1.0",
+  "version": "2.0.0",
   "description": "登場人物とステップを並べて業務フロー図（シーケンス図）を描き、業務分掌まで作る",
   "license": "MIT",
   "private": true,

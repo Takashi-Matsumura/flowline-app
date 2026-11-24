@@ -8,7 +8,7 @@ export default function Home() {
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="flex items-center gap-3 border-b border-black/10 px-4 py-2 dark:border-white/15">
-        <h1 className="text-lg font-semibold">Flowline</h1>
+        <h1 className="text-lg font-semibold">Flowline v2</h1>
         <p className="hidden truncate text-sm text-zinc-500 sm:block">登場人物とステップを手で並べて、業務フロー図を描く</p>
       </header>
       <Suspense fallback={<p className="px-4 py-6 text-sm text-zinc-500">読み込み中…</p>}>
