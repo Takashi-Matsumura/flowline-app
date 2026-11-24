@@ -61,6 +61,15 @@ function useCaptionSize(): [CaptionSize, (v: CaptionSize) => void] {
 
 type Ai = { status: "loading" } | { status: "ready"; narration: Narration } | { status: "error"; message: string };
 
+/** 読み上げに失敗した理由を、画面に出す文にする */
+function speechFailure(e: unknown): string {
+  // 音声を鳴らす前に、ブラウザが自動再生を止めた（画面を操作しないまま再生が始まった場合など）
+  if (e instanceof DOMException && e.name === "NotAllowedError") {
+    return "ブラウザが音声の自動再生を止めました。読み上げを入れ直すか、再生ボタンを押し直してください";
+  }
+  return e instanceof Error ? e.message : "読み上げに失敗しました";
+}
+
 async function errorOf(res: Response): Promise<string> {
   const json = (await res.json().catch(() => ({}))) as { error?: string };
   return json.error ?? `HTTP ${res.status}`;
@@ -86,7 +95,8 @@ export function FlowPlayer({
   model: FlowModel;
   /** 再生中に貼った付箋を図に反映する */
   onCommit: (ops: ModelOp[]) => void;
-  onClose: () => void;
+  /** `stepId` は最後に見ていた手順。編集画面でその手順を選んだ状態に戻すのに使う */
+  onClose: (stepId?: string) => void;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   // 場面は開いたときの図で作る。再生中に付箋を貼ると model が変わるが、それで場面や AI の言い回しを作り直さない
@@ -134,6 +144,14 @@ export function FlowPlayer({
     onCommit([op]);
     setNoteText("");
     setNoting(null);
+  }
+
+  /** 閉じる。今の場面か、それより前でいちばん近い手順を、最後に見ていた手順として渡す（はじめの場面なら無し） */
+  function close() {
+    for (let i = Math.min(index, last); i >= 0; i--) {
+      if (scenes[i].kind === "step") return onClose(scenes[i].key);
+    }
+    onClose();
   }
 
   useEffect(() => {
@@ -233,7 +251,7 @@ export function FlowPlayer({
     const fail = (e: unknown) => {
       if (cancelled) return;
       // 読み上げを止めて、字幕の長さで進む再生に切り替える（この効果が作り直される）
-      setTts({ status: "error", message: e instanceof Error ? e.message : "読み上げに失敗しました" });
+      setTts({ status: "error", message: speechFailure(e) });
     };
     speech(speechOf(scene))
       .then((url) => {
@@ -298,7 +316,7 @@ export function FlowPlayer({
         e.preventDefault();
         // 付箋を書いている途中の Esc は、書く欄だけ閉じる
         if (notingHere) setNoting(null);
-        else onClose();
+        else close();
       }}
       className="m-0 h-dvh max-h-none w-dvw max-w-none bg-background p-0 text-foreground backdrop:bg-black/50"
     >
@@ -308,7 +326,7 @@ export function FlowPlayer({
             <span className="mr-2 text-sm font-normal text-zinc-500">流れを確認</span>
             {name}
           </h2>
-          <button type="button" className={btn} onClick={onClose} title="閉じる（Esc）">
+          <button type="button" className={btn} onClick={close} title="閉じる（Esc）">
             閉じる
           </button>
         </header>
@@ -407,6 +425,24 @@ export function FlowPlayer({
               </div>
             )}
           </div>
+
+          {voice && tts.status === "error" && (
+            <div
+              role="status"
+              className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-400/40 dark:bg-amber-400/10 dark:text-amber-100"
+            >
+              <span className="font-semibold">読み上げが使えません。字幕だけで進みます。</span>
+              <span className="min-w-0 flex-1">{tts.message}</span>
+              <button
+                type="button"
+                className="rounded-md border border-amber-400 px-2.5 py-1 hover:bg-amber-100 dark:border-amber-400/50 dark:hover:bg-amber-400/20"
+                title="VOICEVOX を起動したあとなどに、もう一度つなぎに行きます"
+                onClick={() => setTts({ status: "loading" })}
+              >
+                もう一度つなぐ
+              </button>
+            </div>
+          )}
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <button type="button" className={btn} onClick={() => go(0)} title="最初から（Home）">
