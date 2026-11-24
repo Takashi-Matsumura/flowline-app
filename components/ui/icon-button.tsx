@@ -7,7 +7,8 @@
  * 押せることが一目で分かるよう、白い面・枠・影で浮かせ、乗せると色が付く。
  * `tone="danger"` は削除など取り消せない操作で、乗せると赤くなる。
  * 吹き出しは既定でボタンの上・右端そろえ（表の右端の列に置いても、表の外へはみ出さない）。
- * 画面上端のツールバーでは `tip="below"`、左寄りに置くときは `tipAlign="left"` にする。
+ * 画面上端のツールバーでは `tip="below"` にする。
+ * 左端そろえにしないのは、見えていないときも吹き出しの幅が残り、画面の右端近くでは横スクロールを生むため。
  * `pressed` を渡すと押しっぱなしのボタン（開く/閉じるの切り替え）になり、押している間は青くなる。
  */
 export function IconButton({
@@ -16,7 +17,6 @@ export function IconButton({
   disabled = false,
   tone = "default",
   tip = "above",
-  tipAlign = "right",
   pressed,
   children,
 }: {
@@ -25,7 +25,6 @@ export function IconButton({
   disabled?: boolean;
   tone?: "default" | "danger";
   tip?: "above" | "below";
-  tipAlign?: "left" | "right";
   pressed?: boolean;
   children: React.ReactNode;
 }) {
@@ -34,7 +33,7 @@ export function IconButton({
       ? "hover:border-red-300 hover:bg-red-50 hover:text-red-700 dark:hover:border-red-400/50 dark:hover:bg-red-400/10 dark:hover:text-red-300"
       : "hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 dark:hover:border-sky-400/50 dark:hover:bg-sky-400/10 dark:hover:text-sky-300";
   const on = "border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-400/50 dark:bg-sky-400/10 dark:text-sky-300";
-  const place = `${tip === "below" ? "top-full mt-1.5" : "bottom-full mb-1.5"} ${tipAlign === "left" ? "left-0" : "right-0"}`;
+  const place = `${tip === "below" ? "top-full mt-1.5" : "bottom-full mb-1.5"} right-0`;
   return (
     <span className="group/tip relative inline-flex">
       <button
