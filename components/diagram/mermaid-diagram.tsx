@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { PlayMark } from "@/lib/preview/scenes";
 import type { NoteMarks, NoteState } from "@/lib/model/notes";
 import { currentTheme, useTheme } from "@/lib/theme";
 import { NoteOverlay, noteKey, type NoteAnchor } from "./note-overlay";
+import { measureActors, StickyActors, type ActorHeader } from "./sticky-actors";
 import { COLLAPSED_MARK, FOCUS_COMMENT, PLACEHOLDER_TEXT, type ArmTarget } from "@/lib/render/mermaid";
 
 type MermaidApi = typeof import("mermaid").default;
@@ -713,6 +714,20 @@ export function MermaidDiagram({
   const [drop, setDrop] = useState<Drop | null>(null);
   /** 付箋のアイコンを置く位置と、図の外枠の幅（開く向きを決める） */
   const [noteLayout, setNoteLayout] = useState<{ anchors: NoteAnchor[]; width: number }>({ anchors: [], width: 0 });
+  /** 上に並ぶ登場人物の位置と、それがスクロールで隠れたか（隠れたら上端に名前の帯を出す） */
+  const [actorHeader, setActorHeader] = useState<ActorHeader>({ labels: [], bottom: 0 });
+  const [headerHidden, setHeaderHidden] = useState(false);
+  /** スクロールする外枠。親（onContainerRef）にも渡す */
+  const [viewport, setViewport] = useState<HTMLDivElement | null>(null);
+  const onContainerRefRef = useRef(onContainerRef);
+  useEffect(() => {
+    onContainerRefRef.current = onContainerRef;
+  });
+  // 描画のたびに作り直すと、React が null → 要素 と付け直して状態が揺れるので、関数は 1 つに固定する
+  const containerRef = useCallback((el: HTMLDivElement | null) => {
+    setViewport(el);
+    onContainerRefRef.current?.(el);
+  }, []);
   /** ポインタの位置の落とし先。場合の目印の上なら場合の中、そうでなければステップの間 */
   const dropTarget = (host: HTMLElement, x: number, y: number): DropAt | null => {
     const arm = onDropToArm ? armTargetAt(host, x, y) : null;
@@ -815,14 +830,29 @@ export function MermaidDiagram({
     const host = svgHostRef.current;
     const base = host.parentElement;
     if (!base) return;
-    const observer = new ResizeObserver(() =>
-      setNoteLayout({ anchors: measureNotes(host, base), width: base.clientWidth }),
-    );
+    const observer = new ResizeObserver(() => {
+      setNoteLayout({ anchors: measureNotes(host, base), width: base.clientWidth });
+      setActorHeader(measureActors(host, base));
+    });
     observer.observe(base);
     return () => observer.disconnect();
     // onCollapseFrame は押せるかどうか（title を付けるか）だけを見る。毎回変わる関数でも描き直さない
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rendered, highlightStep, selectedStep, play, notesKey]);
+
+  // 上の登場人物が表示領域の上端より上へ隠れたら、名前の帯を出す
+  useEffect(() => {
+    const base = svgHostRef.current?.parentElement;
+    if (!viewport || !base || actorHeader.labels.length === 0) {
+      setHeaderHidden(false);
+      return;
+    }
+    const update = () =>
+      setHeaderHidden(base.getBoundingClientRect().top + actorHeader.bottom < viewport.getBoundingClientRect().top);
+    update();
+    viewport.addEventListener("scroll", update, { passive: true });
+    return () => viewport.removeEventListener("scroll", update);
+  }, [viewport, actorHeader, rendered]);
 
   const endDrag = () => {
     dragRef.current = null;
@@ -835,7 +865,7 @@ export function MermaidDiagram({
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
       <div
-        ref={onContainerRef}
+        ref={containerRef}
         className={`min-h-0 flex-1 overflow-auto ${fill ? "" : "rounded-md border border-black/10 p-4 dark:border-white/15"}`}
       >
         {rendered ? (
@@ -844,6 +874,10 @@ export function MermaidDiagram({
             className="relative"
             style={zoom === undefined ? undefined : { width: `${zoom * 100}%`, margin: "0 auto" }}
           >
+            {!play && (
+              // 外枠の余白（p-4 = 16px）の分だけはみ出させ、表示領域の端にぴったり付ける
+              <StickyActors header={actorHeader} visible={headerHidden} inset={fill ? 0 : 16} />
+            )}
             <div
               ref={svgHostRef}
               className={`[&_svg]:mx-auto [&_svg]:h-auto transition-opacity ${MARK_CLASS} ${DOT_CLASS} ${onPickPlaceholder ? PLACEHOLDER_CLASS : ""} ${onCollapseFrame ? FRAME_CLASS : ""} ${PICKABLE_CLASS(onPickStep !== undefined)} ${
