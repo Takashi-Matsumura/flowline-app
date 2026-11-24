@@ -5,9 +5,11 @@ import { PLACEHOLDER_TEXT } from "./mermaid";
  */
 
 /** svg11 = SVG 1.1 に揃えた .svg（Canva など、CSS を読まない取り込み先向け。components/diagram/svg11.ts） */
-export type ExportFormat = "drawio" | "mmd" | "svg" | "svg11" | "md";
+/** json = 読み込み直せる図のデータ（lib/store/import.ts の grilljev-flow 形式） */
+export type ExportFormat = "json" | "drawio" | "mmd" | "svg" | "svg11" | "md";
 
 export const EXPORT_MIME: Record<ExportFormat, string> = {
+  json: "application/json;charset=utf-8",
   drawio: "application/vnd.jgraph.mxfile",
   mmd: "text/plain;charset=utf-8",
   svg: "image/svg+xml;charset=utf-8",
