@@ -16,3 +16,5 @@ next-env.d.ts
 Dockerfile
 .dockerignore
 docker-compose*.yml
+# 使い方の動画の制作ファイル（アプリには要らない。録画のコマで大きくなる）
+tutorial

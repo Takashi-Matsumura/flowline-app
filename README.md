@@ -70,7 +70,7 @@ http://localhost:3000 を開きます。
 
 枠に貼った付箋（くり返しを見直す基準、「近い」の判断基準）と、手順に貼った付箋も入っています。
 
-一覧画面のサムネイルから再生する動画は、`public/videos/` に置きます（`01-overview`・`02-drawing`・`03-nesting` の `.mp4` / `.jpg` / `.vtt`）。動画に音声はなく、アプリの再生ダイアログでは字幕（`.vtt`）を VOICEVOX で読み上げます。サイズが大きいので git には入れていません。Docker イメージにはビルド時に取り込まれるので、差し替えたらイメージを作り直してください。一覧は `components/ui/tutorial-videos.tsx` にあります。
+一覧画面のサムネイルから再生する動画は、`public/videos/` に置きます（`01-overview`・`02-drawing`・`03-nesting` の `.mp4` / `.jpg` / `.vtt`）。動画に音声はなく、アプリの再生ダイアログでは字幕（`.vtt`）を VOICEVOX で読み上げます。`.mp4` と `.jpg` はサイズが大きいので git には入れていません（字幕の `.vtt` だけ入れています）。別の PC では、配布している ZIP の中身を `public/videos/` に置いてください。Docker イメージにはビルド時に取り込まれるので、差し替えたらイメージを作り直してください。一覧は `components/ui/tutorial-videos.tsx`、動画の制作スクリプトと作り方は [`tutorial/`](tutorial/README.md) にあります。
 
 ## ディレクトリ構成
 
@@ -93,6 +93,7 @@ lib/
   store/              SQLite への保存
 prompts/              LLM のプロンプト
 samples/              読み込んで使える見本の図（grilljev-flow 形式）
+tutorial/             使い方の動画の制作スクリプト（台本・撮影・組み立て）
 ```
 
 ## スクリプト
