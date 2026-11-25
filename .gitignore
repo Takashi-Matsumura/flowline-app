@@ -47,3 +47,5 @@ next-env.d.ts
 # tutorial videos (too large for git; baked into the Docker image)
 /public/videos/*
 !/public/videos/.gitkeep
+# 字幕（.vtt）は小さいので git に入れる（制作ファイルは tutorial/）
+!/public/videos/*.vtt

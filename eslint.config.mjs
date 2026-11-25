@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // 使い方の動画の制作スクリプト。body<n>.mjs は head.mjs とつないで初めて動く断片なので外す
+    "tutorial/**",
   ]),
 ]);
 

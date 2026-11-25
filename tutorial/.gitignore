@@ -1,0 +1,9 @@
+# 撮影・組み立ての途中でできるもの（作り直せる）
+/node_modules/
+/frames/
+/shots/
+/out/
+/probe/
+/record?.mjs
+/captions-*.json
+/slug.txt
